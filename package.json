@@ -45,7 +45,7 @@
     "publish": {
       "provider": "github",
       "owner": "CARLOS-V-G",
-      "repo": "https://github.com/CARLOS-V-G/iztrack-updates.git",
+      "repo": "https://github.com/CARLOS-V-G/iztrack-updates",
       "releaseType": "release"
     },
     "nsis": {
