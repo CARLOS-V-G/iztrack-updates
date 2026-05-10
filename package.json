@@ -1,7 +1,9 @@
 {
   "name": "iztrack",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
+  "description": "Sistema de gestion de ventas y caja.",
+  "author": "izTrack",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -19,7 +21,7 @@
   "build": {
     "appId": "com.iztrack.app",
     "productName": "izTrack",
-    "copyright": "© 2026 izTrack",
+    "copyright": "Copyright 2026 izTrack",
     "asar": true,
     "asarUnpack": [
       "**/*.node"
@@ -27,7 +29,8 @@
     "npmRebuild": true,
     "buildDependenciesFromSource": true,
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "build"
     },
     "files": [
       "dist/**/*",
@@ -51,7 +54,21 @@
     "nsis": {
       "oneClick": false,
       "perMachine": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "izTrack-Setup-${version}.${ext}",
+      "installerIcon": "./public/log0.ico",
+      "uninstallerIcon": "./public/log0.ico",
+      "installerHeader": "build/installerHeader.bmp",
+      "installerSidebar": "build/installerSidebar.bmp",
+      "uninstallerSidebar": "build/installerSidebar.bmp",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "izTrack",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
+    },
+    "portable": {
+      "artifactName": "izTrack-Portable-${version}.${ext}"
     }
   },
   "dependencies": {

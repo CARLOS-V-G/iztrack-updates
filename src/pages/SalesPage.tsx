@@ -1,14 +1,16 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   Banknote,
   Ban,
+  Barcode,
   CheckCircle,
   CreditCard,
   Landmark,
   Pencil,
   Plus,
   RefreshCw,
+  RotateCcw,
   Smartphone,
   Trash2,
 } from "lucide-react";
@@ -55,15 +57,97 @@ interface SaleAlert {
   message: string;
 }
 
+interface ScannedTicket {
+  id: string;
+  code: string;
+  amount: number;
+  label: string;
+}
+
+interface BarcodeParseResult {
+  code: string;
+  amount: number;
+  label: string;
+}
+
+interface ScannerMessage {
+  tone: "success" | "warning" | "danger";
+  message: string;
+}
+
 interface SaleDraft {
   form: SaleForm;
   amountPaid: string;
   baseAmount: string;
   surcharge: number;
   customSurcharge: string;
+  scannedTickets: ScannedTicket[];
 }
 
 const emptyForm: SaleForm = { amount: "", payment_method: "", notes: "" };
+const SCANNER_IDLE_MS = 250;
+
+function parseMoney(value: string | number) {
+  return Number(String(value).replace(/\D/g, ""));
+}
+
+function formatMoney(value: string | number) {
+  const number = Number(String(value).replace(/\D/g, ""));
+  return number ? number.toLocaleString("es-AR") : "";
+}
+
+function isValidEan13(code: string) {
+  if (!/^\d{13}$/.test(code)) return false;
+
+  const digits = code.split("").map(Number);
+  const checkDigit = digits[12];
+  const sum = digits
+    .slice(0, 12)
+    .reduce((total, digit, index) => total + digit * (index % 2 === 0 ? 1 : 3), 0);
+  const expected = (10 - (sum % 10)) % 10;
+
+  return checkDigit === expected;
+}
+
+function normalizeBarcodeDigits(rawValue: string) {
+  const digits = rawValue.replace(/\D/g, "");
+  return digits.length > 13 ? digits.slice(-13) : digits;
+}
+
+function parseScaleBarcode(rawValue: string): BarcodeParseResult | null {
+  const code = normalizeBarcodeDigits(rawValue);
+
+  if (!/^2\d{12}$/.test(code) || !isValidEan13(code)) return null;
+
+  const plu = code.slice(1, 7);
+  const amount = Number(code.slice(7, 12));
+
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+
+  return {
+    code,
+    amount,
+    label: `PLU ${plu}`,
+  };
+}
+
+function getScaleBarcodeError(rawValue: string) {
+  const code = normalizeBarcodeDigits(rawValue);
+
+  if (/^1\d{12}$/.test(code)) {
+    return `El codigo ${code} es el codigo del comprobante y no trae el importe. Escanea el codigo de barras del producto, arriba del TOTAL, que empieza con 2.`;
+  }
+
+  if (/^\d{13}$/.test(code) && !isValidEan13(code)) {
+    return `El codigo ${code} no paso la validacion EAN-13. Volve a escanear apuntando al codigo completo.`;
+  }
+
+  if (!/^2\d{12}$/.test(code)) {
+    return `El codigo ${code || rawValue} no es un codigo de balanza compatible. Tiene que ser EAN-13 y empezar con 2.`;
+  }
+
+  return `No pude leer el importe del codigo ${code}. Escanea el codigo de barras del producto que empieza con 2.`;
+}
 
 export function SalesPage() {
   const [sales, setSales] = useState<Sale[]>([]);
@@ -80,20 +164,24 @@ export function SalesPage() {
   const [customSurcharge, setCustomSurcharge] = useState("");
   const [baseAmount, setBaseAmount] = useState("");
   const [saleAlert, setSaleAlert] = useState<SaleAlert | null>(null);
+  const [barcodeInput, setBarcodeInput] = useState("");
+  const [scannedTickets, setScannedTickets] = useState<ScannedTicket[]>([]);
+  const [scannerMessage, setScannerMessage] = useState<ScannerMessage | null>(null);
 
-  const parseMoney = (value: string | number) => {
-    return Number(String(value).replace(/\D/g, ""));
-  };
-
-  const formatMoney = (value: string | number) => {
-    const number = Number(String(value).replace(/\D/g, ""));
-    return number.toLocaleString("es-AR");
-  };
+  const scannerInputRef = useRef<HTMLInputElement>(null);
+  const scannerBufferRef = useRef("");
+  const lastScannerKeyAtRef = useRef(0);
+  const scannerBlockedRef = useRef(false);
+  const barcodeSubmitRef = useRef<(value: string) => void>(() => undefined);
+  const quickSaveRef = useRef<() => void>(() => undefined);
 
   const total = parseMoney(form.amount);
   const paid = parseMoney(amountPaid);
   const change = paid - total;
   const isCredit = form.payment_method === "credit";
+  const scannerTotal = scannedTickets.reduce((sum, ticket) => sum + ticket.amount, 0);
+
+  scannerBlockedRef.current = modalOpen || Boolean(deleteId);
 
   useEffect(() => {
     if (form.payment_method !== "credit") {
@@ -117,6 +205,59 @@ export function SalesPage() {
     fetchSales();
   }, [fetchSales]);
 
+  useEffect(() => {
+    scannerInputRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    function handleWindowKeyDown(event: KeyboardEvent) {
+      if (scannerBlockedRef.current) return;
+      if (event.ctrlKey || event.altKey || event.metaKey) return;
+
+      const target = event.target as HTMLElement | null;
+      if (target === scannerInputRef.current) return;
+
+      const isEditable =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        Boolean(target?.isContentEditable);
+
+      if (isEditable) return;
+
+      const now = Date.now();
+      if (now - lastScannerKeyAtRef.current > SCANNER_IDLE_MS) {
+        scannerBufferRef.current = "";
+      }
+
+      lastScannerKeyAtRef.current = now;
+
+      if (event.key === "Enter") {
+        const buffered = scannerBufferRef.current;
+        scannerBufferRef.current = "";
+
+        if (buffered.length >= 8) {
+          event.preventDefault();
+          barcodeSubmitRef.current(buffered);
+          return;
+        }
+
+        if (!isEditable) {
+          event.preventDefault();
+          quickSaveRef.current();
+        }
+        return;
+      }
+
+      if (/^\d$/.test(event.key)) {
+        scannerBufferRef.current = `${scannerBufferRef.current}${event.key}`.slice(-32);
+      }
+    }
+
+    window.addEventListener("keydown", handleWindowKeyDown, true);
+    return () => window.removeEventListener("keydown", handleWindowKeyDown, true);
+  }, []);
+
   function updateForm<K extends keyof SaleForm>(key: K, value: SaleForm[K]) {
     setForm((current) => ({ ...current, [key]: value }));
     if (saleAlert) setSaleAlert(null);
@@ -131,6 +272,10 @@ export function SalesPage() {
     setBaseAmount("");
     setSurcharge(0);
     setCustomSurcharge("");
+    setBarcodeInput("");
+    setScannedTickets([]);
+    setScannerMessage(null);
+    window.setTimeout(() => scannerInputRef.current?.focus(), 0);
   }
 
   function restoreCreateDraft() {
@@ -144,9 +289,11 @@ export function SalesPage() {
     setBaseAmount(draftBeforeEdit.baseAmount);
     setSurcharge(draftBeforeEdit.surcharge);
     setCustomSurcharge(draftBeforeEdit.customSurcharge);
+    setScannedTickets(draftBeforeEdit.scannedTickets);
     setDraftBeforeEdit(null);
     setEditSale(null);
     setSaleAlert(null);
+    window.setTimeout(() => scannerInputRef.current?.focus(), 0);
   }
 
   function closeEditModal() {
@@ -163,6 +310,7 @@ export function SalesPage() {
       baseAmount,
       surcharge,
       customSurcharge,
+      scannedTickets,
     });
     setEditSale(sale);
     setForm({
@@ -174,13 +322,118 @@ export function SalesPage() {
     setAmountPaid("");
     setSurcharge(0);
     setCustomSurcharge("");
+    setBarcodeInput("");
+    setScannedTickets([]);
+    setScannerMessage(null);
     setSaleAlert(null);
     setModalOpen(true);
+  }
+
+  function applyAmountFromScanner(nextAmount: number) {
+    const amount = nextAmount > 0 ? String(nextAmount) : "";
+    updateForm("amount", amount);
+    setBaseAmount(amount);
+  }
+
+  function handleBarcodeSubmit(rawValue: string) {
+    const value = rawValue.trim();
+    if (!value) return;
+
+    if (editSale) {
+      setScannerMessage({
+        tone: "warning",
+        message: "Cierra la edicion antes de escanear tickets para una venta nueva.",
+      });
+      setBarcodeInput("");
+      return;
+    }
+
+    const parsed = parseScaleBarcode(value);
+
+    if (!parsed) {
+      setScannerMessage({
+        tone: "danger",
+        message: getScaleBarcodeError(value),
+      });
+      setBarcodeInput("");
+      window.setTimeout(() => scannerInputRef.current?.focus(), 0);
+      return;
+    }
+
+    const nextTickets = [
+      ...scannedTickets,
+      {
+        id: `${Date.now()}-${parsed.code}`,
+        code: parsed.code,
+        amount: parsed.amount,
+        label: parsed.label,
+      },
+    ];
+    const nextAmount = parseMoney(form.amount) + parsed.amount;
+
+    setScannedTickets(nextTickets);
+    applyAmountFromScanner(nextAmount);
+    setScannerMessage({
+      tone: "success",
+      message: `Ticket agregado por ${formatCurrency(parsed.amount)}. Total escaneado: ${formatCurrency(
+        nextTickets.reduce((sum, ticket) => sum + ticket.amount, 0),
+      )}.`,
+    });
+    setBarcodeInput("");
+    window.setTimeout(() => scannerInputRef.current?.focus(), 0);
+  }
+
+  barcodeSubmitRef.current = handleBarcodeSubmit;
+
+  function removeScannedTicket(ticketId: string) {
+    const ticket = scannedTickets.find((item) => item.id === ticketId);
+    if (!ticket) return;
+
+    const nextTickets = scannedTickets.filter((item) => item.id !== ticketId);
+    const nextAmount = Math.max(0, parseMoney(form.amount) - ticket.amount);
+
+    setScannedTickets(nextTickets);
+    applyAmountFromScanner(nextAmount);
+    setScannerMessage(
+      nextTickets.length
+        ? {
+            tone: "warning",
+            message: `Ticket quitado. Total escaneado: ${formatCurrency(
+              nextTickets.reduce((sum, item) => sum + item.amount, 0),
+            )}.`,
+          }
+        : null,
+    );
+    window.setTimeout(() => scannerInputRef.current?.focus(), 0);
+  }
+
+  function clearScannedTickets() {
+    if (scannedTickets.length === 0) {
+      setBarcodeInput("");
+      setScannerMessage(null);
+      window.setTimeout(() => scannerInputRef.current?.focus(), 0);
+      return;
+    }
+
+    const nextAmount = Math.max(0, parseMoney(form.amount) - scannerTotal);
+
+    setScannedTickets([]);
+    applyAmountFromScanner(nextAmount);
+    setBarcodeInput("");
+    setScannerMessage(null);
+    window.setTimeout(() => scannerInputRef.current?.focus(), 0);
   }
 
   async function handleSave() {
     const amount = Number(form.amount);
     const paymentMethod = form.payment_method;
+    const scannerNote =
+      scannedTickets.length > 0
+        ? `Tickets balanza: ${scannedTickets
+            .map((ticket) => `${ticket.code} ${formatCurrency(ticket.amount)}`)
+            .join(", ")}`
+        : "";
+    const notes = [form.notes.trim(), scannerNote].filter(Boolean).join(" | ");
 
     if (!form.amount || amount <= 0) {
       setSaleAlert({
@@ -208,7 +461,7 @@ export function SalesPage() {
           id: editSale.id,
           amount,
           payment_method: paymentMethod,
-          notes: form.notes.trim(),
+          notes,
         });
         setModalOpen(false);
         restoreCreateDraft();
@@ -217,7 +470,7 @@ export function SalesPage() {
           date: filterDate,
           amount,
           method: paymentMethod,
-          notes: form.notes.trim(),
+          notes,
         });
         resetCreateForm();
       }
@@ -235,6 +488,13 @@ export function SalesPage() {
       setSaving(false);
     }
   }
+
+  quickSaveRef.current = () => {
+    if (saving || editSale || modalOpen || deleteId) return;
+    if (!form.amount || Number(form.amount) <= 0 || !form.payment_method) return;
+
+    handleSave();
+  };
 
   async function toggleVoid(sale: Sale) {
     await window.api.toggleSaleVoid({
@@ -277,10 +537,104 @@ export function SalesPage() {
     updateForm("amount", String(Math.round(newTotal)));
   }
 
+  function renderScannerPanel() {
+    return (
+      <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-lg bg-blue-600 text-white flex items-center justify-center flex-shrink-0">
+              <Barcode className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-900">Escaner de balanza</p>
+              <p className="text-xs text-blue-800 mt-0.5">
+                Apunta al codigo del producto que empieza con 2. No uses el codigo final que empieza con 1.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={clearScannedTickets}
+            className="p-1.5 rounded-lg text-blue-700 hover:bg-white/70 transition-colors"
+            title="Limpiar tickets escaneados"
+          >
+            <RotateCcw className="w-4 h-4" />
+          </button>
+        </div>
+
+        <input
+          ref={scannerInputRef}
+          type="text"
+          inputMode="numeric"
+          value={barcodeInput}
+          onChange={(event) => setBarcodeInput(event.target.value.replace(/\D/g, ""))}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter") return;
+
+            event.preventDefault();
+            handleBarcodeSubmit(event.currentTarget.value);
+          }}
+          placeholder="Escanea aqui o escribe el codigo y Enter"
+          className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-blue-500"
+        />
+
+        {scannerMessage && (
+          <div
+            className={`rounded-lg border px-3 py-2 text-xs ${
+              scannerMessage.tone === "success"
+                ? "border-green-200 bg-green-50 text-green-700"
+                : scannerMessage.tone === "warning"
+                  ? "border-amber-200 bg-amber-50 text-amber-800"
+                  : "border-red-200 bg-red-50 text-red-700"
+            }`}
+          >
+            {scannerMessage.message}
+          </div>
+        )}
+
+        {scannedTickets.length > 0 && (
+          <div className="rounded-xl border border-blue-100 bg-white overflow-hidden">
+            <div className="px-3 py-2 border-b border-blue-50 flex items-center justify-between gap-3">
+              <span className="text-xs font-semibold text-slate-600">
+                {scannedTickets.length} ticket{scannedTickets.length === 1 ? "" : "s"}
+              </span>
+              <span className="text-sm font-bold text-blue-700">{formatCurrency(scannerTotal)}</span>
+            </div>
+
+            <div className="max-h-24 overflow-y-auto divide-y divide-slate-50">
+              {scannedTickets.map((ticket, index) => (
+                <div key={ticket.id} className="px-3 py-2 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-slate-700">
+                      Ticket {index + 1} - {ticket.label}
+                    </p>
+                    <p className="text-[11px] text-slate-400 truncate">{ticket.code}</p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="text-xs font-bold text-slate-900">{formatCurrency(ticket.amount)}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeScannedTicket(ticket.id)}
+                      className="p-1 rounded-md text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                      title="Quitar ticket"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   function renderSaleForm() {
     return (
       <form
-        className="space-y-5"
+        className={editSale ? "space-y-5" : "space-y-4"}
         onSubmit={(event) => {
           event.preventDefault();
           handleSave();
@@ -311,6 +665,8 @@ export function SalesPage() {
             </div>
           </div>
         )}
+
+        {!editSale && renderScannerPanel()}
 
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-3">
@@ -479,7 +835,13 @@ export function SalesPage() {
           />
         </div>
 
-        <div className="flex gap-3 pt-2">
+        <div
+          className={
+            editSale
+              ? "flex gap-3 pt-2"
+              : "sticky bottom-0 z-20 -mx-6 -mb-6 mt-2 flex gap-3 border-t border-slate-100 bg-white/95 px-6 py-4 backdrop-blur"
+          }
+        >
           <Button
             type="button"
             variant="secondary"

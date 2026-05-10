@@ -183,6 +183,31 @@ function persistUpdateDismissed() {
     });
 }
 
+function getUpdateErrorMessage(error) {
+    return error?.message || String(error || "");
+}
+
+function isNoPublishedUpdateError(error) {
+    return /No published versions on GitHub|No releases found|No release found/i.test(
+        getUpdateErrorMessage(error)
+    );
+}
+
+function markNoUpdateAvailable(message = "No hay actualizaciones disponibles.") {
+    clearUpdateState();
+    updateRuntime.state = "not-available";
+    updateRuntime.availableVersion = null;
+    updateRuntime.downloadedVersion = null;
+    updateRuntime.updateDetectedAt = null;
+    updateRuntime.dismissedAt = null;
+    updateRuntime.percent = 0;
+    updateRuntime.bytesPerSecond = 0;
+    updateRuntime.transferred = 0;
+    updateRuntime.total = 0;
+    updateRuntime.message = message;
+    updateRuntime.error = "";
+}
+
 function getUpdateStatus() {
     const supported = Boolean(autoUpdater) && app.isPackaged;
     const updateDetectedAt = updateRuntime.updateDetectedAt;
@@ -251,15 +276,7 @@ function setupAutoUpdater() {
     });
 
     autoUpdater.on("update-not-available", () => {
-        clearUpdateState();
-        updateRuntime.state = "not-available";
-        updateRuntime.availableVersion = null;
-        updateRuntime.downloadedVersion = null;
-        updateRuntime.updateDetectedAt = null;
-        updateRuntime.dismissedAt = null;
-        updateRuntime.percent = 0;
-        updateRuntime.message = "Ya tienes la ultima version.";
-        updateRuntime.error = "";
+        markNoUpdateAvailable("Ya tienes la ultima version.");
         sendUpdateStatus();
     });
 
@@ -284,9 +301,15 @@ function setupAutoUpdater() {
     });
 
     autoUpdater.on("error", (error) => {
+        if (isNoPublishedUpdateError(error)) {
+            markNoUpdateAvailable();
+            sendUpdateStatus();
+            return;
+        }
+
         updateRuntime.state = "error";
         updateRuntime.message = "No se pudo completar la actualizacion.";
-        updateRuntime.error = error?.message || String(error);
+        updateRuntime.error = getUpdateErrorMessage(error);
         sendUpdateStatus();
     });
 
@@ -321,9 +344,15 @@ async function checkForAppUpdates() {
         await autoUpdater.checkForUpdates();
         return getUpdateStatus();
     } catch (err) {
+        if (isNoPublishedUpdateError(err)) {
+            markNoUpdateAvailable();
+            sendUpdateStatus();
+            return getUpdateStatus();
+        }
+
         updateRuntime.state = "error";
         updateRuntime.message = "No se pudo verificar si hay actualizaciones.";
-        updateRuntime.error = err?.message || String(err);
+        updateRuntime.error = getUpdateErrorMessage(err);
         sendUpdateStatus();
         return getUpdateStatus();
     }
@@ -349,7 +378,7 @@ async function downloadAppUpdate() {
     } catch (err) {
         updateRuntime.state = "error";
         updateRuntime.message = "No se pudo descargar la actualizacion.";
-        updateRuntime.error = err?.message || String(err);
+        updateRuntime.error = getUpdateErrorMessage(err);
         sendUpdateStatus();
         return getUpdateStatus();
     }

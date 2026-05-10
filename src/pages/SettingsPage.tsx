@@ -714,7 +714,7 @@ export function SettingsPage() {
                 {updateStatus?.state === "downloaded" &&
                   "Lista para instalar"}
                 {updateStatus?.state === "not-available" &&
-                  "No hay actualizaciones pendientes"}
+                  (updateStatus.message || "No hay actualizaciones disponibles")}
                 {updateStatus?.state === "checking" &&
                   "Verificando actualizaciones..."}
                 {updateStatus?.state === "error" &&
