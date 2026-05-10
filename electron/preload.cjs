@@ -33,6 +33,7 @@ const api = Object.freeze({
 
     // ===== BACKUPS =====
     createBackup: (data) => invoke("create-backup", data),
+    restoreCloudBackup: (data) => invoke("restore-cloud-backup", data),
     restoreData: (data) => invoke("restore-data", data),
 
     // ===== UPDATER =====

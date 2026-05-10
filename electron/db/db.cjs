@@ -68,35 +68,43 @@ function normalizeRecord(record, dateFields) {
     return normalized;
 }
 
-function mergeRecords(currentRecords, incomingRecords, dateFields) {
-    const recordsById = new Map();
+function normalizeRecords(records, dateFields) {
+    return (records || []).map((record) => normalizeRecord(record, dateFields));
+}
 
-    for (const record of currentRecords || []) {
-        const normalized = normalizeRecord(record, dateFields);
-        recordsById.set(normalized.id, normalized);
-    }
+function mergeRecords(currentRecords, incomingRecords, dateFields) {
+    const mergedRecords = normalizeRecords(currentRecords, dateFields);
+    const firstIndexById = new Map();
+
+    mergedRecords.forEach((record, index) => {
+        if (!firstIndexById.has(record.id)) {
+            firstIndexById.set(record.id, index);
+        }
+    });
 
     for (const record of incomingRecords || []) {
         const normalized = normalizeRecord(record, dateFields);
-        const existing = recordsById.get(normalized.id);
+        const existingIndex = firstIndexById.get(normalized.id);
 
-        if (!existing) {
-            recordsById.set(normalized.id, normalized);
+        if (existingIndex === undefined) {
+            firstIndexById.set(normalized.id, mergedRecords.length);
+            mergedRecords.push(normalized);
             continue;
         }
 
+        const existing = mergedRecords[existingIndex];
         const incomingTimestamp = getRecordTimestamp(normalized, dateFields);
         const existingTimestamp = getRecordTimestamp(existing, dateFields);
 
         if (incomingTimestamp > existingTimestamp) {
-            recordsById.set(normalized.id, {
+            mergedRecords[existingIndex] = {
                 ...existing,
                 ...normalized,
-            });
+            };
         }
     }
 
-    return Array.from(recordsById.values());
+    return mergedRecords;
 }
 
 function mergeData(currentData, incomingData) {

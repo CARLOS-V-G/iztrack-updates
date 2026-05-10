@@ -18,7 +18,6 @@ import { Toast } from "../components/ui/Toast";
 import {
   BackupData,
   BackupRecord,
-  decodeBackupData,
 } from "../lib/cloudBackup";
 import { supabase } from "../lib/supabase";
 
@@ -326,42 +325,20 @@ export function SettingsPage() {
     setBackupError("");
 
     try {
-      let query = supabase
-        .from("backups")
-        .select("id, created_at, data")
-        .eq("user_id", userId);
+      const restoreResult = await window.api.restoreCloudBackup({
+        userId,
+        backupId: restoreTarget.id,
+      });
 
-      if (restoreTarget.id === "latest") {
-        query = query.order("created_at", { ascending: false }).limit(1);
-      } else {
-        query = query.eq("id", restoreTarget.id).limit(1);
-      }
-
-      const { data, error } = await query.single();
-
-      if (error || !data) {
-        throw new Error(error?.message || "Backup no encontrado.");
-      }
-
-      const backupData = (data as BackupRecord).data;
-
-      if (!backupData) {
-        throw new Error("El backup no contiene datos restaurables.");
-      }
-
-      const decodedBackup = await decodeBackupData(backupData);
-
-      const restored = await window.api.restoreData(
-        decodedBackup as unknown as Parameters<typeof window.api.restoreData>[0],
-      );
-
-      if (!restored) {
-        throw new Error("No se pudo escribir el backup en la base local.");
+      if (!restoreResult.ok) {
+        throw new Error(
+          restoreResult.error || "No se pudo escribir el backup en la base local.",
+        );
       }
 
       setToast({
         type: "success",
-        message: "Backup restaurado correctamente.",
+        message: restoreResult.message,
       });
       setStatusMessage("Backup restaurado. Reiniciando vista...");
 

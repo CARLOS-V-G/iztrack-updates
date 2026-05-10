@@ -243,6 +243,20 @@ declare global {
                     created_at: string;
                 };
             }>;
+            restoreCloudBackup: (data: {
+                userId: string;
+                backupId?: string;
+            }) => Promise<{
+                ok: boolean;
+                message: string;
+                error?: string;
+                result?: {
+                    id: string;
+                    created_at: string;
+                    sales_count: number;
+                    expenses_count: number;
+                };
+            }>;
             restoreData: (data: {
                 sales: Sale[];
                 expenses: Expense[];

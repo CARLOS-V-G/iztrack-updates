@@ -507,6 +507,26 @@ function createBackupPayload(source) {
     };
 }
 
+function decodeStoredBackupData(data) {
+    if (!data || typeof data !== "object") {
+        throw new Error("El backup no contiene datos restaurables.");
+    }
+
+    if (data.format === "gzip-base64") {
+        if (!data.payload || typeof data.payload !== "string") {
+            throw new Error("El backup comprimido no contiene payload valido.");
+        }
+
+        const json = zlib
+            .gunzipSync(Buffer.from(data.payload, "base64"))
+            .toString("utf8");
+
+        return JSON.parse(json);
+    }
+
+    return data;
+}
+
 function writeLocalBackup(compressed) {
     const backupDir = path.join(app.getPath("userData"), "backups");
     fs.mkdirSync(backupDir, { recursive: true });
@@ -517,6 +537,58 @@ function writeLocalBackup(compressed) {
     fs.writeFileSync(backupPath, compressed);
 
     return backupPath;
+}
+
+async function restoreCloudBackup(userId, backupId) {
+    const safeUserId = normalizeId(userId, "user_id");
+    const safeBackupId =
+        backupId && backupId !== "latest" ? normalizeId(backupId, "backup_id") : null;
+
+    let query = supabase
+        .from("backups")
+        .select("id, created_at, data")
+        .eq("user_id", safeUserId);
+
+    if (safeBackupId) {
+        query = query.eq("id", safeBackupId).limit(1);
+    } else {
+        query = query.order("created_at", { ascending: false }).limit(1);
+    }
+
+    const { data: backup, error } = await withTimeout(
+        query.single(),
+        BACKUP_TIMEOUT_MS
+    );
+
+    if (error || !backup) {
+        throw new Error(error?.message || "Backup no encontrado.");
+    }
+
+    const decodedBackup = decodeStoredBackupData(backup.data);
+    const { sales, expenses } = normalizeBackupData(decodedBackup);
+    const restoredAt = new Date().toISOString();
+
+    await db.read();
+
+    db.data.sales = sales.map((sale) => ({
+        ...sale,
+        id: sale.id || uuidv4(),
+        updated_at: sale.updated_at || restoredAt,
+    }));
+    db.data.expenses = expenses.map((expense) => ({
+        ...expense,
+        id: expense.id || uuidv4(),
+        updated_at: expense.updated_at || restoredAt,
+    }));
+
+    await db.write();
+
+    return {
+        id: backup.id,
+        created_at: backup.created_at,
+        sales_count: db.data.sales.length,
+        expenses_count: db.data.expenses.length,
+    };
 }
 
 function withTimeout(promise, timeoutMs) {
@@ -1213,6 +1285,25 @@ ipcMain.handle("create-backup", async (_, data) => {
             cloudOk: false,
             error: err.message || "No se pudo crear el backup.",
             message: "No se pudo crear el backup.",
+        };
+    }
+});
+
+ipcMain.handle("restore-cloud-backup", async (_, data) => {
+    try {
+        const result = await restoreCloudBackup(data?.userId, data?.backupId);
+
+        return {
+            ok: true,
+            result,
+            message: `Backup restaurado: ${result.sales_count} ventas y ${result.expenses_count} gastos.`,
+        };
+    } catch (err) {
+        console.error("restore-cloud-backup error:", err);
+        return {
+            ok: false,
+            error: err.message || "No se pudo restaurar el backup.",
+            message: "No se pudo restaurar el backup.",
         };
     }
 });
