@@ -384,10 +384,37 @@ async function downloadAppUpdate() {
     }
 }
 
-function installAppUpdate() {
+async function snapshotBeforeUpdateInstall() {
+    await db.read();
+
+    const salesCount = db.data?.sales?.length || 0;
+    const expensesCount = db.data?.expenses?.length || 0;
+
+    if (salesCount === 0 && expensesCount === 0) return null;
+
+    const payload = createBackupPayload("manual");
+    return writeLocalBackup(payload.compressed);
+}
+
+async function installAppUpdate() {
     setupAutoUpdater();
 
     if (!autoUpdater || !app.isPackaged || updateRuntime.state !== "downloaded") {
+        return getUpdateStatus();
+    }
+
+    try {
+        const localBackupPath = await snapshotBeforeUpdateInstall();
+        if (localBackupPath) {
+            updateRuntime.message = "Backup local creado antes de instalar la actualizacion.";
+            sendUpdateStatus();
+        }
+    } catch (err) {
+        updateRuntime.state = "error";
+        updateRuntime.message = "No se instalo la actualizacion para proteger tus datos.";
+        updateRuntime.error =
+            err?.message || "No se pudo crear un backup local antes de actualizar.";
+        sendUpdateStatus();
         return getUpdateStatus();
     }
 
@@ -639,7 +666,7 @@ ipcMain.handle("updater:download", async () => {
     return downloadAppUpdate();
 });
 
-ipcMain.handle("updater:install", () => {
+ipcMain.handle("updater:install", async () => {
     return installAppUpdate();
 });
 

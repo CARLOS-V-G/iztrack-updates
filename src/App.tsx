@@ -10,7 +10,7 @@ import LicenseScreen from "./components/LicenseScreen";
 import AdminPanel from "./components/AdminPanel";
 import AdminLogin from "./components/AdminLogin";
 import { UpdateManager } from "./components/UpdateManager";
-import { restoreBackup, applyBackup } from "./lib/cloudBackup";
+import { restoreBackup } from "./lib/cloudBackup";
 import { syncData } from "./lib/cloudSync";
 import { SettingsPage } from "./pages/SettingsPage";
 
@@ -117,6 +117,8 @@ function App() {
   }, [licensed]);
 
   useEffect(() => {
+    if (!licensed) return;
+
     async function migrate() {
       const migrated = localStorage.getItem("backup_migrated");
       if (migrated) return;
@@ -142,9 +144,11 @@ function App() {
     }
 
     migrate();
-  }, []);
+  }, [licensed]);
 
   useEffect(() => {
+    if (!licensed) return;
+
     const interval = setInterval(
       async () => {
         const userId = localStorage.getItem("userId");
@@ -190,7 +194,7 @@ function App() {
     ); // cada 5 min
 
     return () => clearInterval(interval);
-  }, []);
+  }, [licensed]);
 
   // ⏱️ SPLASH TIMER
   useEffect(() => {
@@ -202,6 +206,8 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!licensed) return;
+
     async function restore() {
       const justRestored = localStorage.getItem("backup_restored");
       if (justRestored === "true") {
@@ -226,7 +232,13 @@ function App() {
 
       if (!data) return;
 
-      await applyBackup(data);
+      const restored = await window.api.restoreData(
+        data as unknown as Parameters<typeof window.api.restoreData>[0],
+      );
+      if (!restored) {
+        console.error("No se pudo restaurar el backup en la base local");
+        return;
+      }
 
       localStorage.setItem("backup_restored", "true");
 
@@ -234,7 +246,7 @@ function App() {
     }
 
     restore();
-  }, []);
+  }, [licensed]);
 
   // 🔐 LOGIN ADMIN
   if (adminMode && !adminAuth) {

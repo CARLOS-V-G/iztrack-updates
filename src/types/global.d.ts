@@ -97,17 +97,27 @@ declare global {
             // ===== SALES =====
             getSales: () => Promise<Sale[]>;
             addSale: (sale: {
-                date: string;
+                id?: string;
+                date?: string;
+                sale_date?: string;
                 amount: number;
-                method: PaymentMethod;
+                method?: PaymentMethod;
+                payment_method?: PaymentMethod;
                 notes?: string;
-            }) => Promise<void>;
+                voided?: boolean;
+                updated_at?: string;
+            }) => Promise<Sale>;
 
             updateSale: (sale: {
                 id: string;
-                amount: number;
-                payment_method: PaymentMethod;
+                date?: string;
+                sale_date?: string;
+                amount?: number;
+                method?: PaymentMethod;
+                payment_method?: PaymentMethod;
                 notes?: string;
+                voided?: boolean;
+                updated_at?: string;
             }) => Promise<void>;
 
             toggleSaleVoid: (data: {
@@ -121,23 +131,29 @@ declare global {
             getExpenses: () => Promise<Expense[]>;
 
             addExpense: (exp: {
-                date: string;
+                id?: string;
+                date?: string;
+                expense_date?: string;
                 concept: string;
                 category: string;
                 amount: number;
                 payment_method: PaymentMethod;
                 status: ExpenseStatus;
                 notes?: string;
-            }) => Promise<void>;
+                updated_at?: string;
+            }) => Promise<Expense>;
 
             updateExpense: (exp: {
                 id: string;
-                concept: string;
-                category: string;
-                amount: number;
-                payment_method: PaymentMethod;
-                status: ExpenseStatus;
+                date?: string;
+                expense_date?: string;
+                concept?: string;
+                category?: string;
+                amount?: number;
+                payment_method?: PaymentMethod;
+                status?: ExpenseStatus;
                 notes?: string;
+                updated_at?: string;
             }) => Promise<void>;
 
             toggleExpenseStatus: (data: {

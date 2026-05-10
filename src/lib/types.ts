@@ -6,9 +6,10 @@ export interface Sale {
   sale_date: string;
   amount: number;
   payment_method: PaymentMethod;
-  notes: string;
+  notes?: string;
   voided: boolean;
-  created_at: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Expense {
@@ -19,8 +20,9 @@ export interface Expense {
   amount: number;
   payment_method: PaymentMethod;
   status: ExpenseStatus;
-  notes: string;
-  created_at: string;
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface DailySummary {

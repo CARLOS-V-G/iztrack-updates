@@ -351,9 +351,13 @@ export function SettingsPage() {
 
       const decodedBackup = await decodeBackupData(backupData);
 
-      await window.api.restoreData(
+      const restored = await window.api.restoreData(
         decodedBackup as unknown as Parameters<typeof window.api.restoreData>[0],
       );
+
+      if (!restored) {
+        throw new Error("No se pudo escribir el backup en la base local.");
+      }
 
       setToast({
         type: "success",
