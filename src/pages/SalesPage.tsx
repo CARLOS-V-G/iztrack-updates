@@ -175,6 +175,18 @@ export function SalesPage() {
   const barcodeSubmitRef = useRef<(value: string) => void>(() => undefined);
   const quickSaveRef = useRef<() => void>(() => undefined);
 
+  const focusScannerInput = useCallback(() => {
+    window.setTimeout(() => {
+      if (scannerBlockedRef.current) return;
+
+      const input = scannerInputRef.current;
+      if (!input) return;
+
+      input.focus({ preventScroll: true });
+      input.select();
+    }, 0);
+  }, []);
+
   const total = parseMoney(form.amount);
   const paid = parseMoney(amountPaid);
   const change = paid - total;
@@ -206,8 +218,24 @@ export function SalesPage() {
   }, [fetchSales]);
 
   useEffect(() => {
-    scannerInputRef.current?.focus();
-  }, []);
+    focusScannerInput();
+
+    function handleWindowFocus() {
+      focusScannerInput();
+    }
+
+    function handleVisibilityChange() {
+      if (!document.hidden) focusScannerInput();
+    }
+
+    window.addEventListener("focus", handleWindowFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("focus", handleWindowFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [focusScannerInput]);
 
   useEffect(() => {
     function handleWindowKeyDown(event: KeyboardEvent) {
@@ -275,7 +303,7 @@ export function SalesPage() {
     setBarcodeInput("");
     setScannedTickets([]);
     setScannerMessage(null);
-    window.setTimeout(() => scannerInputRef.current?.focus(), 0);
+    focusScannerInput();
   }
 
   function restoreCreateDraft() {
@@ -293,7 +321,7 @@ export function SalesPage() {
     setDraftBeforeEdit(null);
     setEditSale(null);
     setSaleAlert(null);
-    window.setTimeout(() => scannerInputRef.current?.focus(), 0);
+    focusScannerInput();
   }
 
   function closeEditModal() {
@@ -356,7 +384,7 @@ export function SalesPage() {
         message: getScaleBarcodeError(value),
       });
       setBarcodeInput("");
-      window.setTimeout(() => scannerInputRef.current?.focus(), 0);
+      focusScannerInput();
       return;
     }
 
@@ -380,7 +408,7 @@ export function SalesPage() {
       )}.`,
     });
     setBarcodeInput("");
-    window.setTimeout(() => scannerInputRef.current?.focus(), 0);
+    focusScannerInput();
   }
 
   barcodeSubmitRef.current = handleBarcodeSubmit;
@@ -404,14 +432,14 @@ export function SalesPage() {
           }
         : null,
     );
-    window.setTimeout(() => scannerInputRef.current?.focus(), 0);
+    focusScannerInput();
   }
 
   function clearScannedTickets() {
     if (scannedTickets.length === 0) {
       setBarcodeInput("");
       setScannerMessage(null);
-      window.setTimeout(() => scannerInputRef.current?.focus(), 0);
+      focusScannerInput();
       return;
     }
 
@@ -421,7 +449,7 @@ export function SalesPage() {
     applyAmountFromScanner(nextAmount);
     setBarcodeInput("");
     setScannerMessage(null);
-    window.setTimeout(() => scannerInputRef.current?.focus(), 0);
+    focusScannerInput();
   }
 
   async function handleSave() {
@@ -573,7 +601,14 @@ export function SalesPage() {
             if (event.key !== "Enter") return;
 
             event.preventDefault();
-            handleBarcodeSubmit(event.currentTarget.value);
+            const value = event.currentTarget.value;
+
+            if (value.trim()) {
+              handleBarcodeSubmit(value);
+              return;
+            }
+
+            quickSaveRef.current();
           }}
           placeholder="Escanea aqui o escribe el codigo y Enter"
           className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-blue-500"
