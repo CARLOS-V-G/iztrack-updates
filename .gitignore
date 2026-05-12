@@ -26,3 +26,4 @@ license.json
 *.sln
 *.sw?
 .env
+supabase/.temp

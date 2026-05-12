@@ -11,6 +11,14 @@ const MAX_TEXT_LENGTH = 500;
 const MAX_SHORT_TEXT_LENGTH = 120;
 const MAX_BACKUP_ITEMS = 100000;
 const DATA_DELETE_CONFIRM_PHRASE = "ELIMINAR DATOS";
+const DEFAULT_SCANNER_CONFIG = {
+    barcode_prefix: "2",
+    plu_start: 1,
+    plu_length: 6,
+    amount_start: 7,
+    amount_length: 5,
+    amount_divisor: 1,
+};
 
 function invalid(message) {
     const error = new Error(message);
@@ -122,6 +130,26 @@ function normalizePositiveAmount(value, fieldName = "amount") {
     return amount;
 }
 
+function normalizeNonNegativeAmount(value, fieldName = "amount") {
+    const amount = Number(value);
+
+    if (!Number.isFinite(amount) || amount < 0) {
+        invalid(`${fieldName} no puede ser negativo`);
+    }
+
+    return amount;
+}
+
+function normalizeInteger(value, fieldName, min, max) {
+    const number = Number(value);
+
+    if (!Number.isInteger(number) || number < min || number > max) {
+        invalid(`${fieldName} fuera de rango`);
+    }
+
+    return number;
+}
+
 function normalizeDate(value, fieldName) {
     const rawDate = normalizeString(value, fieldName, 64);
     const date = rawDate.slice(0, 10);
@@ -193,6 +221,7 @@ function normalizeSaleForCreate(value) {
         notes: normalizeOptionalString(sale.notes, "notes"),
         sale_date: normalizeDate(sale.sale_date ?? sale.date, "sale_date"),
         voided: sale.voided === undefined ? false : normalizeBoolean(sale.voided, "voided"),
+        created_at: normalizeTimestamp(sale.created_at, "created_at"),
         updated_at: normalizeTimestamp(sale.updated_at),
     };
 
@@ -255,6 +284,7 @@ function normalizeExpenseForCreate(value) {
         status: normalizeExpenseStatus(expense.status ?? "pending"),
         notes: normalizeOptionalString(expense.notes, "notes"),
         expense_date: normalizeDate(expense.expense_date ?? expense.date, "expense_date"),
+        created_at: normalizeTimestamp(expense.created_at, "created_at"),
         updated_at: normalizeTimestamp(expense.updated_at),
     };
 
@@ -315,6 +345,141 @@ function normalizeExpenseStatusToggle(value) {
     };
 }
 
+function normalizeAmountByPaymentMethod(value, fieldName) {
+    const data = assertPlainObject(value ?? {}, fieldName);
+    const normalized = {};
+
+    for (const method of PAYMENT_METHODS) {
+        normalized[method] = normalizeNonNegativeAmount(data[method] ?? 0, `${fieldName}.${method}`);
+    }
+
+    return normalized;
+}
+
+function normalizeCashClosureForSave(value) {
+    const closure = assertPlainObject(value, "cash_closure");
+    const normalized = {
+        close_date: normalizeDate(closure.close_date ?? closure.date, "close_date"),
+        counted: normalizeAmountByPaymentMethod(closure.counted, "counted"),
+        expected: normalizeAmountByPaymentMethod(closure.expected, "expected"),
+        total_sales: normalizeNonNegativeAmount(closure.total_sales ?? 0, "total_sales"),
+        total_paid_expenses: normalizeNonNegativeAmount(
+            closure.total_paid_expenses ?? 0,
+            "total_paid_expenses",
+        ),
+        total_pending_expenses: normalizeNonNegativeAmount(
+            closure.total_pending_expenses ?? 0,
+            "total_pending_expenses",
+        ),
+        net_profit: Number(closure.net_profit ?? 0),
+        difference: Number(closure.difference ?? 0),
+        operator_name: normalizeOptionalString(closure.operator_name, "operator_name", 80),
+        notes: normalizeOptionalString(closure.notes, "notes"),
+        status:
+            closure.status === "open" || closure.status === "closed"
+                ? closure.status
+                : "closed",
+        created_at: normalizeTimestamp(closure.created_at, "created_at"),
+        updated_at: normalizeTimestamp(closure.updated_at),
+    };
+
+    if (!Number.isFinite(normalized.net_profit)) invalid("net_profit invalido");
+    if (!Number.isFinite(normalized.difference)) invalid("difference invalido");
+
+    if (closure.id !== undefined && closure.id !== null) {
+        normalized.id = normalizeId(closure.id);
+    }
+
+    return normalized;
+}
+
+function normalizeProductForSave(value) {
+    const product = assertPlainObject(value, "product");
+    const normalized = {
+        plu: normalizeString(product.plu, "plu", 24).replace(/\D/g, "").padStart(6, "0"),
+        name: normalizeString(product.name, "name", MAX_SHORT_TEXT_LENGTH),
+        price_per_kg:
+            product.price_per_kg === undefined || product.price_per_kg === null || product.price_per_kg === ""
+                ? 0
+                : normalizeNonNegativeAmount(product.price_per_kg, "price_per_kg"),
+        active: product.active === undefined ? true : normalizeBoolean(product.active, "active"),
+        notes: normalizeOptionalString(product.notes, "notes"),
+        created_at: normalizeTimestamp(product.created_at, "created_at"),
+        updated_at: normalizeTimestamp(product.updated_at),
+    };
+
+    if (!/^\d{1,12}$/.test(normalized.plu)) {
+        invalid("plu invalido");
+    }
+
+    if (product.id !== undefined && product.id !== null) {
+        normalized.id = normalizeId(product.id);
+    }
+
+    return normalized;
+}
+
+function normalizeScannerConfig(value) {
+    const config = assertPlainObject(value, "scanner_config");
+
+    const barcodePrefix = normalizeString(
+            config.barcode_prefix ?? DEFAULT_SCANNER_CONFIG.barcode_prefix,
+            "barcode_prefix",
+            4,
+        ).replace(/\D/g, "");
+
+    if (!barcodePrefix) {
+        invalid("barcode_prefix debe tener al menos un numero");
+    }
+
+    return {
+        barcode_prefix: barcodePrefix,
+        plu_start: normalizeInteger(
+            config.plu_start ?? DEFAULT_SCANNER_CONFIG.plu_start,
+            "plu_start",
+            0,
+            12,
+        ),
+        plu_length: normalizeInteger(
+            config.plu_length ?? DEFAULT_SCANNER_CONFIG.plu_length,
+            "plu_length",
+            1,
+            12,
+        ),
+        amount_start: normalizeInteger(
+            config.amount_start ?? DEFAULT_SCANNER_CONFIG.amount_start,
+            "amount_start",
+            0,
+            12,
+        ),
+        amount_length: normalizeInteger(
+            config.amount_length ?? DEFAULT_SCANNER_CONFIG.amount_length,
+            "amount_length",
+            1,
+            12,
+        ),
+        amount_divisor: normalizeInteger(
+            config.amount_divisor ?? DEFAULT_SCANNER_CONFIG.amount_divisor,
+            "amount_divisor",
+            1,
+            100000,
+        ),
+    };
+}
+
+function normalizeAuditLog(value) {
+    const log = assertPlainObject(value, "audit_log");
+
+    return {
+        id: log.id ? normalizeId(log.id) : undefined,
+        action: normalizeString(log.action, "action", 80),
+        entity: normalizeString(log.entity, "entity", 80),
+        entity_id: normalizeOptionalString(log.entity_id, "entity_id", 128),
+        description: normalizeOptionalString(log.description, "description", MAX_TEXT_LENGTH),
+        created_at: normalizeTimestamp(log.created_at, "created_at"),
+    };
+}
+
 function normalizeArray(value, fieldName, normalizer) {
     if (value === undefined || value === null) return [];
 
@@ -332,13 +497,29 @@ function normalizeArray(value, fieldName, normalizer) {
 function normalizeBackupData(value) {
     const backup = assertPlainObject(value, "backup");
 
-    if (backup.sales === undefined && backup.expenses === undefined) {
+    if (
+        backup.sales === undefined &&
+        backup.expenses === undefined &&
+        backup.cash_closures === undefined &&
+        backup.products === undefined
+    ) {
         invalid("backup sin datos restaurables");
     }
 
     return {
         sales: normalizeArray(backup.sales, "sales", normalizeSaleForCreate),
         expenses: normalizeArray(backup.expenses, "expenses", normalizeExpenseForCreate),
+        cash_closures: normalizeArray(
+            backup.cash_closures,
+            "cash_closures",
+            normalizeCashClosureForSave,
+        ),
+        products: normalizeArray(backup.products, "products", normalizeProductForSave),
+        audit_logs: normalizeArray(backup.audit_logs, "audit_logs", normalizeAuditLog),
+        scanner_config:
+            backup.scanner_config && typeof backup.scanner_config === "object"
+                ? normalizeScannerConfig(backup.scanner_config)
+                : { ...DEFAULT_SCANNER_CONFIG },
     };
 }
 
@@ -378,6 +559,7 @@ function normalizeDataWipeRunRequest(value) {
 module.exports = {
     normalizeBackupData,
     normalizeBoolean,
+    normalizeCashClosureForSave,
     normalizeDataWipeRunRequest,
     normalizeDeleteUserDataRequest,
     normalizeEmail,
@@ -388,7 +570,9 @@ module.exports = {
     normalizeLicenseInput,
     normalizeLicenseRecordId,
     normalizePassword,
+    normalizeProductForSave,
     normalizeSaleForCreate,
     normalizeSaleForUpdate,
     normalizeSaleVoidToggle,
+    normalizeScannerConfig,
 };

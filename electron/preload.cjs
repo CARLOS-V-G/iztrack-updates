@@ -26,6 +26,7 @@ const api = Object.freeze({
     generateLicense: (email) => invoke("generate-license", email),
     createLicense: (email) => invoke("create-license", email),
     toggleLicense: (id, status) => invoke("toggle-license", id, status),
+    updateLicenseEmail: (id, email) => invoke("update-license-email", id, email),
     deleteLicense: (id) => invoke("delete-license", id),
     deleteUserData: (data) => invoke("delete-user-data", data),
     loginAdmin: (password) => invoke("login-admin", password),
@@ -35,6 +36,17 @@ const api = Object.freeze({
     createBackup: (data) => invoke("create-backup", data),
     restoreCloudBackup: (data) => invoke("restore-cloud-backup", data),
     restoreData: (data) => invoke("restore-data", data),
+    exportDiagnostics: (context) => invoke("export-diagnostics", context),
+
+    // ===== CASH CLOSURE / PRODUCTS =====
+    getCashClosures: () => invoke("get-cash-closures"),
+    saveCashClosure: (closure) => invoke("save-cash-closure", closure),
+    getProducts: () => invoke("get-products"),
+    saveProduct: (product) => invoke("save-product", product),
+    deleteProduct: (id) => invoke("delete-product", id),
+    getScannerConfig: () => invoke("get-scanner-config"),
+    saveScannerConfig: (config) => invoke("save-scanner-config", config),
+    getAuditLogs: (limit) => invoke("get-audit-logs", limit),
 
     // ===== UPDATER =====
     getUpdateStatus: () => invoke("updater:get-status"),

@@ -13,6 +13,7 @@ declare global {
         | "digital_wallet";
 
     type ExpenseStatus = "paid" | "pending";
+    type CashClosureStatus = "open" | "closed";
 
     type UpdateStatusState =
         | "idle"
@@ -62,6 +63,7 @@ declare global {
         notes?: string;
         voided: boolean;
         sale_date: string;
+        created_at?: string;
         updated_at?: string; // 🔥 AGREGAR ESTO
     }
 
@@ -78,8 +80,74 @@ declare global {
         status: ExpenseStatus;
         notes?: string;
         expense_date: string;
+        created_at?: string;
         updated_at?: string; // 🔥 TAMBIÉN
     }
+    type AmountByPaymentMethod = Record<PaymentMethod, number>;
+
+    interface CashClosure {
+        id: string;
+        close_date: string;
+        counted: AmountByPaymentMethod;
+        expected: AmountByPaymentMethod;
+        total_sales: number;
+        total_paid_expenses: number;
+        total_pending_expenses: number;
+        net_profit: number;
+        difference: number;
+        operator_name?: string;
+        notes?: string;
+        status: CashClosureStatus;
+        created_at?: string;
+        updated_at?: string;
+    }
+
+    interface Product {
+        id: string;
+        plu: string;
+        name: string;
+        price_per_kg?: number;
+        active: boolean;
+        notes?: string;
+        created_at?: string;
+        updated_at?: string;
+    }
+
+    interface ScannerConfig {
+        barcode_prefix: string;
+        plu_start: number;
+        plu_length: number;
+        amount_start: number;
+        amount_length: number;
+        amount_divisor: number;
+        updated_at?: string;
+    }
+
+    interface AuditLog {
+        id: string;
+        action: string;
+        entity: string;
+        entity_id?: string;
+        description?: string;
+        created_at: string;
+    }
+
+    interface DiagnosticExportContext {
+        userId?: string | null;
+        backupsVisibleCount?: number;
+        latestCloudBackup?: {
+            id: string;
+            created_at: string;
+            source?: string | null;
+            sales_count?: number | null;
+            expenses_count?: number | null;
+        } | null;
+        lastAutoBackupAt?: string | null;
+        lastAutoBackupLocalAt?: string | null;
+        lastAutoBackupError?: string | null;
+        updateStatus?: AppUpdateStatus | null;
+    }
+
     type LicenseDB = {
         id: string;
         email: string;
@@ -105,6 +173,7 @@ declare global {
                 payment_method?: PaymentMethod;
                 notes?: string;
                 voided?: boolean;
+                created_at?: string;
                 updated_at?: string;
             }) => Promise<Sale>;
 
@@ -117,6 +186,7 @@ declare global {
                 payment_method?: PaymentMethod;
                 notes?: string;
                 voided?: boolean;
+                created_at?: string;
                 updated_at?: string;
             }) => Promise<void>;
 
@@ -140,6 +210,7 @@ declare global {
                 payment_method: PaymentMethod;
                 status: ExpenseStatus;
                 notes?: string;
+                created_at?: string;
                 updated_at?: string;
             }) => Promise<Expense>;
 
@@ -153,6 +224,7 @@ declare global {
                 payment_method?: PaymentMethod;
                 status?: ExpenseStatus;
                 notes?: string;
+                created_at?: string;
                 updated_at?: string;
             }) => Promise<void>;
 
@@ -171,6 +243,7 @@ declare global {
             }) => Promise<{
                 ok: boolean;
                 message: string;
+                userId?: string;
             }>;
             saveLicense: (data: {
                 email: string;
@@ -183,6 +256,11 @@ declare global {
             generateLicense: (email: string) => Promise<string>;
             createLicense: (email: string) => Promise<string | null>;
             toggleLicense: (id: string, status: boolean) => Promise<boolean>;
+            updateLicenseEmail: (id: string, email: string) => Promise<{
+                ok: boolean;
+                message: string;
+                license?: LicenseDB;
+            }>;
             deleteLicense: (id: string) => Promise<boolean>;
             deleteUserData: (data: {
                 userId: string;
@@ -235,6 +313,8 @@ declare global {
                 stats?: {
                     sales_count: number;
                     expenses_count: number;
+                    cash_closures_count?: number;
+                    products_count?: number;
                     uncompressed_bytes: number;
                     compressed_bytes: number;
                 };
@@ -255,12 +335,40 @@ declare global {
                     created_at: string;
                     sales_count: number;
                     expenses_count: number;
+                    cash_closures_count?: number;
+                    products_count?: number;
                 };
             }>;
             restoreData: (data: {
                 sales: Sale[];
                 expenses: Expense[];
+                cash_closures?: CashClosure[];
+                products?: Product[];
+                audit_logs?: AuditLog[];
+                scanner_config?: ScannerConfig;
             }) => Promise<boolean>;
+            exportDiagnostics: (context?: DiagnosticExportContext) => Promise<{
+                ok: boolean;
+                cancelled?: boolean;
+                path?: string;
+                message: string;
+            }>;
+            getCashClosures: () => Promise<CashClosure[]>;
+            saveCashClosure: (closure: Omit<CashClosure, "id" | "created_at" | "updated_at"> & {
+                id?: string;
+                created_at?: string;
+                updated_at?: string;
+            }) => Promise<CashClosure>;
+            getProducts: () => Promise<Product[]>;
+            saveProduct: (product: Omit<Product, "id" | "created_at" | "updated_at"> & {
+                id?: string;
+                created_at?: string;
+                updated_at?: string;
+            }) => Promise<Product>;
+            deleteProduct: (id: string) => Promise<void>;
+            getScannerConfig: () => Promise<ScannerConfig>;
+            saveScannerConfig: (config: ScannerConfig) => Promise<ScannerConfig>;
+            getAuditLogs: (limit?: number) => Promise<AuditLog[]>;
             getUpdateStatus: () => Promise<AppUpdateStatus>;
             checkForUpdates: () => Promise<AppUpdateStatus>;
             downloadUpdate: () => Promise<AppUpdateStatus>;

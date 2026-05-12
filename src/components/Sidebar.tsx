@@ -2,6 +2,7 @@ import {
   LayoutDashboard,
   ShoppingCart,
   Receipt,
+  Calculator,
   FileBarChart2,
   TrendingUp,
   Settings, // 🔥 AGREGAR
@@ -21,6 +22,7 @@ const navItems: Array<{
   { page: "dashboard", label: "Panel Principal", icon: LayoutDashboard },
   { page: "sales", label: "Ventas", icon: ShoppingCart },
   { page: "expenses", label: "Gastos", icon: Receipt },
+  { page: "cash_closure", label: "Cierre de Caja", icon: Calculator },
   { page: "reports", label: "Reportes", icon: FileBarChart2 },
   { page: "charts", label: "Gráficos", icon: TrendingUp },
   { page: "settings", label: "Configuración", icon: Settings }, // 🔥 NUEVO

@@ -5,6 +5,7 @@ import {
   Clock,
   Cloud,
   DownloadCloud,
+  FileDown,
   History,
   RefreshCw,
   RotateCcw,
@@ -156,6 +157,7 @@ export function SettingsPage() {
   );
   const [updateStatus, setUpdateStatus] = useState<AppUpdateStatus | null>(null);
   const [updateBusy, setUpdateBusy] = useState(false);
+  const [diagnosticBusy, setDiagnosticBusy] = useState(false);
 
   const latestBackup = backups[0];
   const busy = operation !== "idle";
@@ -401,6 +403,49 @@ export function SettingsPage() {
       setUpdateStatus(await window.api.installUpdate());
     } finally {
       setUpdateBusy(false);
+    }
+  }
+
+  async function handleExportDiagnostics() {
+    setDiagnosticBusy(true);
+
+    try {
+      const result = await window.api.exportDiagnostics({
+        userId: getUserId(),
+        backupsVisibleCount: backups.length,
+        latestCloudBackup: latestBackup
+          ? {
+              id: latestBackup.id,
+              created_at: latestBackup.created_at,
+              source: getBackupRecordSource(latestBackup),
+              sales_count: latestBackup.sales_count ?? null,
+              expenses_count: latestBackup.expenses_count ?? null,
+            }
+          : null,
+        lastAutoBackupAt,
+        lastAutoBackupLocalAt,
+        lastAutoBackupError,
+        updateStatus,
+      });
+
+      if (result.ok) {
+        setToast({
+          type: "success",
+          message: result.message,
+        });
+      } else if (!result.cancelled) {
+        setToast({
+          type: "error",
+          message: result.message,
+        });
+      }
+    } catch (error) {
+      setToast({
+        type: "error",
+        message: getErrorMessage(error),
+      });
+    } finally {
+      setDiagnosticBusy(false);
     }
   }
 
@@ -762,6 +807,15 @@ export function SettingsPage() {
                 Ultima actualizacion instalada
               </p>
             </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={handleExportDiagnostics}
+              loading={diagnosticBusy}
+            >
+              <FileDown className="w-4 h-4" />
+              Exportar diagnostico
+            </Button>
           </Card>
         </div>
       </div>

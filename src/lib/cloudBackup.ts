@@ -1,11 +1,22 @@
 import { supabase } from "./supabase";
-import { ExpenseStatus, PaymentMethod } from "./types";
+import {
+    AuditLog,
+    CashClosure,
+    ExpenseStatus,
+    PaymentMethod,
+    Product,
+    ScannerConfig,
+} from "./types";
 
 export type BackupSource = "manual" | "automatic" | "migration";
 
 export type BackupData = {
     sales: BackupSale[];
     expenses: BackupExpense[];
+    cash_closures?: CashClosure[];
+    products?: Product[];
+    audit_logs?: AuditLog[];
+    scanner_config?: ScannerConfig;
     meta?: BackupMeta;
 };
 
@@ -14,6 +25,8 @@ export type BackupMeta = {
     created_at: string;
     sales_count: number;
     expenses_count: number;
+    cash_closures_count?: number;
+    products_count?: number;
     app_version: string;
     format?: "json" | "gzip-base64";
     uncompressed_bytes?: number;
@@ -57,6 +70,8 @@ export type BackupRecord = {
     source?: BackupSource | null;
     sales_count?: number | null;
     expenses_count?: number | null;
+    cash_closures_count?: number | null;
+    products_count?: number | null;
     compressed_bytes?: number | null;
     uncompressed_bytes?: number | null;
 };
@@ -145,6 +160,7 @@ function compactSale(sale: BackupSale): BackupSale {
         payment_method: sale.payment_method,
         notes: sale.notes || "",
         voided: sale.voided ?? false,
+        created_at: sale.created_at,
         updated_at: sale.updated_at,
     };
 }
@@ -159,6 +175,7 @@ function compactExpense(expense: BackupExpense): BackupExpense {
         payment_method: expense.payment_method,
         status: expense.status,
         notes: expense.notes || "",
+        created_at: expense.created_at,
         updated_at: expense.updated_at,
     };
 }
@@ -169,12 +186,18 @@ async function createStoredBackupData(data: Omit<BackupData, "meta">, source: Ba
         created_at: new Date().toISOString(),
         sales_count: data.sales.length,
         expenses_count: data.expenses.length,
+        cash_closures_count: data.cash_closures?.length || 0,
+        products_count: data.products?.length || 0,
         app_version: "1.0.0",
         format: "json",
     };
     const payload: BackupData = {
         sales: data.sales.map(compactSale),
         expenses: data.expenses.map(compactExpense),
+        cash_closures: data.cash_closures || [],
+        products: data.products || [],
+        audit_logs: data.audit_logs || [],
+        scanner_config: data.scanner_config,
         meta,
     };
     const json = JSON.stringify(payload);
@@ -252,6 +275,10 @@ export async function restoreBackup(userId: string) {
 export async function applyBackup(data: {
     sales: BackupSale[];
     expenses: BackupExpense[];
+    cash_closures?: CashClosure[];
+    products?: Product[];
+    audit_logs?: AuditLog[];
+    scanner_config?: ScannerConfig;
 }) {
     for (const sale of data.sales) {
         await window.api.addSale({

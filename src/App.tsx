@@ -3,6 +3,7 @@ import { Layout } from "./components/Layout";
 import { Dashboard } from "./pages/Dashboard";
 import { SalesPage } from "./pages/SalesPage";
 import { ExpensesPage } from "./pages/ExpensesPage";
+import { CashClosurePage } from "./pages/CashClosurePage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { ChartsPage } from "./pages/ChartsPage";
 import { Page } from "./lib/types";
@@ -20,17 +21,28 @@ type BackupSignatureRecord = {
   created_at?: string;
   sale_date?: string;
   expense_date?: string;
+  close_date?: string;
+  plu?: string;
 };
 
 function getBackupSignature(
   sales: BackupSignatureRecord[],
   expenses: BackupSignatureRecord[],
+  cashClosures: BackupSignatureRecord[] = [],
+  products: BackupSignatureRecord[] = [],
+  scannerConfig: unknown = null,
 ) {
   const summarize = (items: BackupSignatureRecord[]) => {
     return items.reduce(
       (acc, item) => {
         const timestamp =
-          item.updated_at || item.created_at || item.sale_date || item.expense_date || "";
+          item.updated_at ||
+          item.created_at ||
+          item.sale_date ||
+          item.expense_date ||
+          item.close_date ||
+          item.plu ||
+          "";
 
         return {
           count: acc.count + 1,
@@ -45,6 +57,9 @@ function getBackupSignature(
   return JSON.stringify({
     sales: summarize(sales),
     expenses: summarize(expenses),
+    cashClosures: summarize(cashClosures),
+    products: summarize(products),
+    scannerConfig,
   });
 }
 
@@ -154,9 +169,20 @@ function App() {
         const userId = localStorage.getItem("userId");
         if (!userId) return;
 
-        const sales = await window.api.getSales();
-        const expenses = await window.api.getExpenses();
-        const signature = getBackupSignature(sales, expenses);
+        const [sales, expenses, cashClosures, products, scannerConfig] = await Promise.all([
+          window.api.getSales(),
+          window.api.getExpenses(),
+          window.api.getCashClosures(),
+          window.api.getProducts(),
+          window.api.getScannerConfig(),
+        ]);
+        const signature = getBackupSignature(
+          sales,
+          expenses,
+          cashClosures,
+          products,
+          scannerConfig,
+        );
         const previousSignature = localStorage.getItem("last_auto_backup_signature");
 
         if (signature === previousSignature) {
@@ -317,6 +343,7 @@ function App() {
     dashboard: <Dashboard />,
     sales: <SalesPage />,
     expenses: <ExpensesPage />,
+    cash_closure: <CashClosurePage />,
     reports: <ReportsPage />,
     charts: <ChartsPage />,
     settings: <SettingsPage />, // 🔥 NUEVO

@@ -8,7 +8,9 @@ import {
   HardDrive,
   KeyRound,
   LogOut,
+  Mail,
   Monitor,
+  Pencil,
   Plus,
   RefreshCw,
   Search,
@@ -54,6 +56,11 @@ type WipeForm = {
   requestRemoteLocal: boolean;
 };
 
+type EmailEditForm = {
+  email: string;
+  confirmEmail: string;
+};
+
 type Props = {
   onLogout: () => void;
 };
@@ -81,6 +88,11 @@ const emptyWipeForm: WipeForm = {
   deleteCloud: true,
   deleteLocal: false,
   requestRemoteLocal: false,
+};
+
+const emptyEmailEditForm: EmailEditForm = {
+  email: "",
+  confirmEmail: "",
 };
 
 const noticeClasses = {
@@ -135,6 +147,9 @@ function AdminPanel({ onLogout }: Props) {
   const [wipeTarget, setWipeTarget] = useState<User | null>(null);
   const [wipeForm, setWipeForm] = useState<WipeForm>(emptyWipeForm);
   const [wipeLoading, setWipeLoading] = useState(false);
+  const [emailEditTarget, setEmailEditTarget] = useState<User | null>(null);
+  const [emailEditForm, setEmailEditForm] = useState<EmailEditForm>(emptyEmailEditForm);
+  const [emailEditLoading, setEmailEditLoading] = useState(false);
 
   const localUserId = localStorage.getItem("userId") || "";
 
@@ -244,6 +259,33 @@ function AdminPanel({ onLogout }: Props) {
       (wipeForm.deleteCloud || wipeForm.deleteLocal || wipeForm.requestRemoteLocal) &&
       (!wipeForm.deleteLocal || canWipeCurrentLocal)
   );
+
+  const cleanEditedEmail = emailEditForm.email.trim().toLowerCase();
+  const cleanEditedConfirmation = emailEditForm.confirmEmail.trim().toLowerCase();
+  const canConfirmEmailEdit = Boolean(
+    emailEditTarget &&
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEditedEmail) &&
+      cleanEditedEmail !== emailEditTarget.email.toLowerCase() &&
+      cleanEditedConfirmation === cleanEditedEmail
+  );
+
+  function openEmailEditModal(user: User) {
+    setEmailEditTarget(user);
+    setEmailEditForm({
+      email: "",
+      confirmEmail: "",
+    });
+    setNotice(null);
+  }
+
+  function closeEmailEditModal() {
+    setEmailEditTarget(null);
+    setEmailEditForm(emptyEmailEditForm);
+  }
+
+  function updateEmailEditForm<K extends keyof EmailEditForm>(key: K, value: EmailEditForm[K]) {
+    setEmailEditForm((current) => ({ ...current, [key]: value }));
+  }
 
   function openWipeModal(user: User) {
     const isLocalUser = user.id === localUserId;
@@ -421,6 +463,60 @@ function AdminPanel({ onLogout }: Props) {
       });
     } finally {
       setWipeLoading(false);
+    }
+  }
+
+  async function confirmEmailEdit() {
+    if (!emailEditTarget || !canConfirmEmailEdit) return;
+
+    setEmailEditLoading(true);
+    setActionId(emailEditTarget.id);
+
+    try {
+      const result = await window.api.updateLicenseEmail(emailEditTarget.id, cleanEditedEmail);
+
+      if (!result.ok || !result.license) {
+        setNotice({
+          type: "error",
+          message: result.message,
+        });
+        return;
+      }
+
+      const updatedUser: User = {
+        id: result.license.id,
+        email: result.license.email,
+        license_key: result.license.license_key,
+        active: result.license.active,
+        device_id: result.license.device_id,
+      };
+
+      setUsers((current) =>
+        current.map((user) => (user.id === updatedUser.id ? updatedUser : user))
+      );
+
+      if (updatedUser.id === localUserId) {
+        localStorage.setItem("email", updatedUser.email);
+        await window.api.saveLicense({
+          email: updatedUser.email,
+          key: updatedUser.license_key,
+        });
+      }
+
+      setNotice({
+        type: "success",
+        message: result.message,
+      });
+      closeEmailEditModal();
+    } catch (error) {
+      console.error("Error actualizando email:", error);
+      setNotice({
+        type: "error",
+        message: "No se pudo actualizar el email de la licencia.",
+      });
+    } finally {
+      setActionId(null);
+      setEmailEditLoading(false);
     }
   }
 
@@ -652,6 +748,16 @@ function AdminPanel({ onLogout }: Props) {
                             </div>
 
                             <div className="flex items-center gap-2 flex-shrink-0">
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                loading={actionId === user.id && emailEditLoading}
+                                onClick={() => openEmailEditModal(user)}
+                              >
+                                <Pencil className="w-4 h-4" />
+                                Email
+                              </Button>
+
                               <Button
                                 variant={user.active ? "secondary" : "success"}
                                 size="sm"
@@ -936,6 +1042,102 @@ function AdminPanel({ onLogout }: Props) {
                 onClick={confirmDataWipe}
               >
                 Borrar datos
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {emailEditTarget && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-lg overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+              <div>
+                <h3 className="font-semibold text-slate-900 flex items-center gap-2">
+                  <Mail className="w-5 h-5 text-blue-600" />
+                  Cambiar email de licencia
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  La licencia y los datos del cliente se mantienen.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeEmailEditModal}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="px-5 py-5 space-y-4">
+              <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+                <p className="text-xs font-semibold text-blue-900">No se genera una licencia nueva</p>
+                <p className="text-xs text-blue-800 mt-1">
+                  Solo cambia el email de contacto. Se conserva el mismo ID, la misma clave y los backups/ventas del cliente.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">
+                  Email actual
+                </label>
+                <input
+                  value={emailEditTarget.email}
+                  disabled
+                  className="w-full px-3 py-2.5 border border-slate-200 bg-slate-50 rounded-xl text-sm text-slate-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">
+                  Nuevo email
+                </label>
+                <input
+                  type="email"
+                  value={emailEditForm.email}
+                  onChange={(event) => updateEmailEditForm("email", event.target.value)}
+                  placeholder="cliente@email.com"
+                  className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">
+                  Repite el nuevo email
+                </label>
+                <input
+                  type="email"
+                  value={emailEditForm.confirmEmail}
+                  onChange={(event) => updateEmailEditForm("confirmEmail", event.target.value)}
+                  placeholder={cleanEditedEmail || "cliente@email.com"}
+                  className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="rounded-xl border border-slate-200 px-4 py-3">
+                <p className="text-xs text-slate-500">Licencia conservada</p>
+                <code className="mt-1 block text-xs text-slate-700 bg-slate-100 rounded-lg px-2 py-1 truncate">
+                  {emailEditTarget.license_key}
+                </code>
+              </div>
+            </div>
+
+            <div className="flex gap-3 px-5 py-4 border-t border-slate-200">
+              <Button
+                variant="secondary"
+                className="flex-1"
+                onClick={closeEmailEditModal}
+              >
+                Cancelar
+              </Button>
+              <Button
+                className="flex-1"
+                disabled={!canConfirmEmailEdit}
+                loading={emailEditLoading}
+                onClick={confirmEmailEdit}
+              >
+                Guardar email
               </Button>
             </div>
           </Card>

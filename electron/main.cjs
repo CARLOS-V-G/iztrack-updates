@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain } = require("electron");
 const path = require("path");
 const os = require("os");
 const fs = require("fs");
@@ -18,6 +18,7 @@ const bcrypt = require("bcryptjs");
 const {
     normalizeBackupData,
     normalizeBoolean,
+    normalizeCashClosureForSave,
     normalizeDataWipeRunRequest,
     normalizeDeleteUserDataRequest,
     normalizeEmail,
@@ -28,9 +29,11 @@ const {
     normalizeLicenseInput,
     normalizeLicenseRecordId,
     normalizePassword,
+    normalizeProductForSave,
     normalizeSaleForCreate,
     normalizeSaleForUpdate,
     normalizeSaleVoidToggle,
+    normalizeScannerConfig,
 } = require("./ipcValidation.cjs");
 
 // 🔥 SUPABASE
@@ -40,7 +43,7 @@ const supabase = createClient(
 );
 
 // 🔥 LOWDB
-const { db, initDB } = require("./db/db.cjs");
+const { db, initDB, dbPath } = require("./db/db.cjs");
 
 // 🔐 HASH ADMIN
 const ADMIN_HASH = "$2b$10$emWYM2L4SgilfgvHCASHeOgp/FwULV3brE8IdSz2w7Hw0P/VCgmR6";
@@ -435,8 +438,195 @@ function getDeviceId() {
     return os.hostname();
 }
 
+function readLocalLicense() {
+    if (!fs.existsSync(licensePath)) {
+        throw new Error("No hay licencia local activa.");
+    }
+
+    return normalizeLicenseInput(JSON.parse(fs.readFileSync(licensePath, "utf8")));
+}
+
+function writeLocalLicense(license) {
+    fs.writeFileSync(licensePath, JSON.stringify(license), "utf8");
+}
+
+function maskSecret(value) {
+    const text = String(value || "");
+    if (!text) return "";
+    if (text.length <= 8) return "***";
+
+    return `${text.slice(0, 4)}...${text.slice(-4)}`;
+}
+
+function sanitizeDiagnosticString(value, maxLength = 500) {
+    if (value === undefined || value === null) return null;
+
+    return String(value).slice(0, maxLength);
+}
+
+function getFileMetadata(filePath) {
+    try {
+        const stat = fs.statSync(filePath);
+
+        return {
+            path: filePath,
+            exists: true,
+            size_bytes: stat.size,
+            modified_at: stat.mtime.toISOString(),
+        };
+    } catch {
+        return {
+            path: filePath,
+            exists: false,
+            size_bytes: 0,
+            modified_at: null,
+        };
+    }
+}
+
+function getLatestRecordTimestamp(records, fields) {
+    return (records || []).reduce((latest, record) => {
+        const value = fields.map((field) => record?.[field]).find(Boolean);
+        const timestamp = value ? String(value) : "";
+
+        return timestamp > latest ? timestamp : latest;
+    }, "");
+}
+
+function getDiagnosticsContext(value) {
+    const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+
+    return {
+        user_id: sanitizeDiagnosticString(source.userId, 128),
+        backups_visible_count: Number(source.backupsVisibleCount || 0),
+        latest_cloud_backup: source.latestCloudBackup || null,
+        last_auto_backup_at: sanitizeDiagnosticString(source.lastAutoBackupAt, 64),
+        last_auto_backup_local_at: sanitizeDiagnosticString(source.lastAutoBackupLocalAt, 64),
+        last_auto_backup_error: sanitizeDiagnosticString(source.lastAutoBackupError, 500),
+        update_state: source.updateStatus || null,
+    };
+}
+
+function getLocalLicenseDiagnostics() {
+    try {
+        const license = readLocalLicense();
+
+        return {
+            present: true,
+            email: license.email,
+            license_key_masked: maskSecret(license.key),
+        };
+    } catch (err) {
+        return {
+            present: false,
+            error: err.message || "No se pudo leer la licencia local.",
+        };
+    }
+}
+
+function createDiagnosticsPayload(context) {
+    ensureExtendedDataShape();
+
+    return {
+        exported_at: new Date().toISOString(),
+        app: {
+            name: "izTrack",
+            version: app.getVersion(),
+            packaged: app.isPackaged,
+            platform: process.platform,
+            arch: process.arch,
+            electron: process.versions.electron,
+            node: process.versions.node,
+        },
+        paths: {
+            user_data: app.getPath("userData"),
+            app_path: app.getAppPath(),
+            executable: app.getPath("exe"),
+            db: getFileMetadata(dbPath),
+            license: getFileMetadata(licensePath),
+            update_state: getFileMetadata(getUpdateStatePath()),
+        },
+        license: getLocalLicenseDiagnostics(),
+        data: {
+            sales_count: db.data.sales.length,
+            expenses_count: db.data.expenses.length,
+            cash_closures_count: db.data.cash_closures.length,
+            products_count: db.data.products.length,
+            active_products_count: db.data.products.filter((product) => product.active !== false).length,
+            audit_logs_count: db.data.audit_logs.length,
+            latest_sale_at: getLatestRecordTimestamp(db.data.sales, ["updated_at", "created_at", "sale_date"]) || null,
+            latest_expense_at:
+                getLatestRecordTimestamp(db.data.expenses, ["updated_at", "created_at", "expense_date"]) || null,
+            latest_cash_closure_at:
+                getLatestRecordTimestamp(db.data.cash_closures, ["updated_at", "created_at", "close_date"]) || null,
+            scanner_config: db.data.scanner_config,
+        },
+        backups: getDiagnosticsContext(context),
+        updater: {
+            ...getUpdateStatus(),
+            load_error: autoUpdaterLoadError ? autoUpdaterLoadError.message : "",
+        },
+        recent_audit_logs: [...db.data.audit_logs]
+            .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))
+            .slice(0, 20),
+    };
+}
+
 function normalizeBackupSource(source) {
     return BACKUP_SOURCES.has(source) ? source : "manual";
+}
+
+function getDefaultScannerConfig() {
+    return {
+        barcode_prefix: "2",
+        plu_start: 1,
+        plu_length: 6,
+        amount_start: 7,
+        amount_length: 5,
+        amount_divisor: 1,
+    };
+}
+
+function ensureExtendedDataShape() {
+    db.data ||= {};
+    db.data.sales ||= [];
+    db.data.expenses ||= [];
+    db.data.cash_closures ||= [];
+    db.data.products ||= [];
+    db.data.audit_logs ||= [];
+    db.data.scanner_config = {
+        ...getDefaultScannerConfig(),
+        ...(db.data.scanner_config || {}),
+    };
+}
+
+function compactAmountMap(values) {
+    const source = values || {};
+
+    return {
+        cash: Number(source.cash || 0),
+        debit: Number(source.debit || 0),
+        credit: Number(source.credit || 0),
+        transfer: Number(source.transfer || 0),
+        digital_wallet: Number(source.digital_wallet || 0),
+    };
+}
+
+function appendAuditLog(action, entity, entityId, description) {
+    ensureExtendedDataShape();
+
+    db.data.audit_logs.push({
+        id: uuidv4(),
+        action,
+        entity,
+        entity_id: entityId ? String(entityId) : "",
+        description: description || "",
+        created_at: new Date().toISOString(),
+    });
+
+    db.data.audit_logs = db.data.audit_logs
+        .sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")))
+        .slice(-500);
 }
 
 function compactSaleForBackup(sale) {
@@ -447,6 +637,7 @@ function compactSaleForBackup(sale) {
         payment_method: sale.payment_method || sale.method || "cash",
         notes: sale.notes || "",
         voided: sale.voided ?? false,
+        created_at: sale.created_at,
         updated_at: sale.updated_at,
     };
 }
@@ -461,21 +652,79 @@ function compactExpenseForBackup(expense) {
         payment_method: expense.payment_method || expense.method || "cash",
         status: expense.status || "paid",
         notes: expense.notes || "",
+        created_at: expense.created_at,
         updated_at: expense.updated_at,
     };
 }
 
+function compactCashClosureForBackup(closure) {
+    return {
+        id: closure.id,
+        close_date: closure.close_date,
+        counted: compactAmountMap(closure.counted),
+        expected: compactAmountMap(closure.expected),
+        total_sales: Number(closure.total_sales || 0),
+        total_paid_expenses: Number(closure.total_paid_expenses || 0),
+        total_pending_expenses: Number(closure.total_pending_expenses || 0),
+        net_profit: Number(closure.net_profit || 0),
+        difference: Number(closure.difference || 0),
+        operator_name: closure.operator_name || "",
+        notes: closure.notes || "",
+        status: closure.status || "closed",
+        created_at: closure.created_at,
+        updated_at: closure.updated_at,
+    };
+}
+
+function compactProductForBackup(product) {
+    return {
+        id: product.id,
+        plu: product.plu,
+        name: product.name,
+        price_per_kg: Number(product.price_per_kg || 0),
+        active: product.active !== false,
+        notes: product.notes || "",
+        created_at: product.created_at,
+        updated_at: product.updated_at,
+    };
+}
+
+function compactAuditLogForBackup(log) {
+    return {
+        id: log.id,
+        action: log.action,
+        entity: log.entity,
+        entity_id: log.entity_id || "",
+        description: log.description || "",
+        created_at: log.created_at,
+    };
+}
+
 function createBackupPayload(source) {
+    ensureExtendedDataShape();
+
     const sales = (db.data.sales || []).map(compactSaleForBackup);
     const expenses = (db.data.expenses || []).map(compactExpenseForBackup);
+    const cash_closures = (db.data.cash_closures || []).map(compactCashClosureForBackup);
+    const products = (db.data.products || []).map(compactProductForBackup);
+    const audit_logs = (db.data.audit_logs || []).map(compactAuditLogForBackup);
     const jsonPayload = JSON.stringify({
         sales,
         expenses,
+        cash_closures,
+        products,
+        audit_logs,
+        scanner_config: {
+            ...getDefaultScannerConfig(),
+            ...(db.data.scanner_config || {}),
+        },
         meta: {
             source,
             created_at: new Date().toISOString(),
             sales_count: sales.length,
             expenses_count: expenses.length,
+            cash_closures_count: cash_closures.length,
+            products_count: products.length,
             app_version: app.getVersion(),
             format: "json",
         },
@@ -491,6 +740,8 @@ function createBackupPayload(source) {
                 created_at: new Date().toISOString(),
                 sales_count: sales.length,
                 expenses_count: expenses.length,
+                cash_closures_count: cash_closures.length,
+                products_count: products.length,
                 app_version: app.getVersion(),
                 format: "gzip-base64",
                 uncompressed_bytes: Buffer.byteLength(jsonPayload, "utf8"),
@@ -501,6 +752,8 @@ function createBackupPayload(source) {
         stats: {
             sales_count: sales.length,
             expenses_count: expenses.length,
+            cash_closures_count: cash_closures.length,
+            products_count: products.length,
             uncompressed_bytes: Buffer.byteLength(jsonPayload, "utf8"),
             compressed_bytes: compressed.byteLength,
         },
@@ -565,21 +818,46 @@ async function restoreCloudBackup(userId, backupId) {
     }
 
     const decodedBackup = decodeStoredBackupData(backup.data);
-    const { sales, expenses } = normalizeBackupData(decodedBackup);
+    const { sales, expenses, cash_closures, products, audit_logs, scanner_config } =
+        normalizeBackupData(decodedBackup);
     const restoredAt = new Date().toISOString();
 
     await db.read();
+    ensureExtendedDataShape();
 
     db.data.sales = sales.map((sale) => ({
         ...sale,
         id: sale.id || uuidv4(),
+        created_at: sale.created_at || restoredAt,
         updated_at: sale.updated_at || restoredAt,
     }));
     db.data.expenses = expenses.map((expense) => ({
         ...expense,
         id: expense.id || uuidv4(),
+        created_at: expense.created_at || restoredAt,
         updated_at: expense.updated_at || restoredAt,
     }));
+    db.data.cash_closures = cash_closures.map((closure) => ({
+        ...closure,
+        id: closure.id || uuidv4(),
+        created_at: closure.created_at || restoredAt,
+        updated_at: closure.updated_at || restoredAt,
+    }));
+    db.data.products = products.map((product) => ({
+        ...product,
+        id: product.id || uuidv4(),
+        created_at: product.created_at || restoredAt,
+        updated_at: product.updated_at || restoredAt,
+    }));
+    db.data.audit_logs = audit_logs.map((log) => ({
+        ...log,
+        id: log.id || uuidv4(),
+        created_at: log.created_at || restoredAt,
+    }));
+    db.data.scanner_config = {
+        ...getDefaultScannerConfig(),
+        ...(scanner_config || {}),
+    };
 
     await db.write();
 
@@ -588,6 +866,8 @@ async function restoreCloudBackup(userId, backupId) {
         created_at: backup.created_at,
         sales_count: db.data.sales.length,
         expenses_count: db.data.expenses.length,
+        cash_closures_count: db.data.cash_closures.length,
+        products_count: db.data.products.length,
     };
 }
 
@@ -619,9 +899,7 @@ async function getLicenseById(userId) {
 async function getCurrentLocalUserId() {
     if (!fs.existsSync(licensePath)) return null;
 
-    const license = normalizeLicenseInput(
-        JSON.parse(fs.readFileSync(licensePath, "utf8"))
-    );
+    const license = readLocalLicense();
 
     const { data, error } = await supabase
         .from("licenses")
@@ -640,10 +918,17 @@ async function clearLocalDatabase() {
     const stats = {
         salesDeleted: (db.data.sales || []).length,
         expensesDeleted: (db.data.expenses || []).length,
+        cashClosuresDeleted: (db.data.cash_closures || []).length,
+        productsDeleted: (db.data.products || []).length,
+        auditLogsDeleted: (db.data.audit_logs || []).length,
     };
 
     db.data.sales = [];
     db.data.expenses = [];
+    db.data.cash_closures = [];
+    db.data.products = [];
+    db.data.audit_logs = [];
+    db.data.scanner_config = getDefaultScannerConfig();
     await db.write();
 
     return stats;
@@ -793,7 +1078,7 @@ ipcMain.handle("check-license", async () => {
 ipcMain.handle("save-license", (_, data) => {
     const license = normalizeLicenseInput(data);
 
-    fs.writeFileSync(licensePath, JSON.stringify(license), "utf8");
+    writeLocalLicense(license);
 });
 
 ipcMain.handle("get-licenses", async () => {
@@ -862,6 +1147,7 @@ ipcMain.handle("validate-license", async (_, data) => {
 
 ipcMain.handle("get-sales", async () => {
     await db.read();
+    ensureExtendedDataShape();
     return db.data.sales;
 });
 
@@ -869,6 +1155,8 @@ ipcMain.handle("add-sale", async (_, sale) => {
     const input = normalizeSaleForCreate(sale);
 
     await db.read();
+    ensureExtendedDataShape();
+    const now = new Date().toISOString();
 
     const newSale = {
         id: input.id || uuidv4(),
@@ -877,10 +1165,17 @@ ipcMain.handle("add-sale", async (_, sale) => {
         notes: input.notes,
         sale_date: input.sale_date,
         voided: input.voided,
-        updated_at: input.updated_at || new Date().toISOString(),
+        created_at: input.created_at || input.updated_at || now,
+        updated_at: input.updated_at || now,
     };
 
     db.data.sales.push(newSale);
+    appendAuditLog(
+        "create",
+        "sale",
+        newSale.id,
+        `Venta registrada por $ ${Number(newSale.amount).toLocaleString("es-AR")}`,
+    );
     await db.write();
 
     return newSale;
@@ -890,6 +1185,7 @@ ipcMain.handle("update-sale", async (_, updated) => {
     const input = normalizeSaleForUpdate(updated);
 
     await db.read();
+    ensureExtendedDataShape();
 
     const index = db.data.sales.findIndex((s) => s.id === input.id);
 
@@ -905,6 +1201,7 @@ ipcMain.handle("update-sale", async (_, updated) => {
             ...changes,
             updated_at: updatedAt || new Date().toISOString(),
         };
+        appendAuditLog("update", "sale", input.id, "Venta editada");
     }
 
     await db.write();
@@ -914,11 +1211,18 @@ ipcMain.handle("toggle-sale-void", async (_, data) => {
     const input = normalizeSaleVoidToggle(data);
 
     await db.read();
+    ensureExtendedDataShape();
 
     const sale = db.data.sales.find((s) => s.id === input.id);
     if (sale) {
         sale.voided = input.voided;
         sale.updated_at = new Date().toISOString();
+        appendAuditLog(
+            input.voided ? "void" : "restore",
+            "sale",
+            input.id,
+            input.voided ? "Venta anulada" : "Venta reactivada",
+        );
     }
 
     await db.write();
@@ -928,8 +1232,16 @@ ipcMain.handle("delete-sale", async (_, id) => {
     const saleId = normalizeId(id);
 
     await db.read();
+    ensureExtendedDataShape();
 
+    const sale = db.data.sales.find((s) => s.id === saleId);
     db.data.sales = db.data.sales.filter((s) => s.id !== saleId);
+    appendAuditLog(
+        "delete",
+        "sale",
+        saleId,
+        sale ? `Venta eliminada por $ ${Number(sale.amount || 0).toLocaleString("es-AR")}` : "Venta eliminada",
+    );
 
     await db.write();
 });
@@ -940,6 +1252,7 @@ ipcMain.handle("delete-sale", async (_, id) => {
 
 ipcMain.handle("get-expenses", async () => {
     await db.read();
+    ensureExtendedDataShape();
     return db.data.expenses || [];
 });
 
@@ -947,10 +1260,13 @@ ipcMain.handle("add-expense", async (_, exp) => {
     const input = normalizeExpenseForCreate(exp);
 
     await db.read();
+    ensureExtendedDataShape();
+    const now = new Date().toISOString();
 
     const newExp = {
         id: input.id || uuidv4(),
-        updated_at: input.updated_at || new Date().toISOString(),
+        created_at: input.created_at || input.updated_at || now,
+        updated_at: input.updated_at || now,
         concept: input.concept,
         category: input.category,
         amount: input.amount,
@@ -962,6 +1278,12 @@ ipcMain.handle("add-expense", async (_, exp) => {
 
     db.data.expenses ||= [];
     db.data.expenses.push(newExp);
+    appendAuditLog(
+        "create",
+        "expense",
+        newExp.id,
+        `Gasto registrado: ${newExp.concept} por $ ${Number(newExp.amount).toLocaleString("es-AR")}`,
+    );
 
     await db.write();
 
@@ -972,6 +1294,7 @@ ipcMain.handle("update-expense", async (_, exp) => {
     const input = normalizeExpenseForUpdate(exp);
 
     await db.read();
+    ensureExtendedDataShape();
 
     const index = db.data.expenses.findIndex((e) => e.id === input.id);
 
@@ -987,6 +1310,7 @@ ipcMain.handle("update-expense", async (_, exp) => {
             ...changes,
             updated_at: updatedAt || new Date().toISOString(),
         };
+        appendAuditLog("update", "expense", input.id, "Gasto editado");
     }
 
     await db.write();
@@ -996,11 +1320,18 @@ ipcMain.handle("toggle-expense-status", async (_, data) => {
     const input = normalizeExpenseStatusToggle(data);
 
     await db.read();
+    ensureExtendedDataShape();
 
     const exp = db.data.expenses.find((e) => e.id === input.id);
     if (exp) {
         exp.status = input.status;
         exp.updated_at = new Date().toISOString();
+        appendAuditLog(
+            "status",
+            "expense",
+            input.id,
+            input.status === "paid" ? "Gasto marcado como pagado" : "Gasto marcado como pendiente",
+        );
     }
 
     await db.write();
@@ -1010,10 +1341,169 @@ ipcMain.handle("delete-expense", async (_, id) => {
     const expenseId = normalizeId(id);
 
     await db.read();
+    ensureExtendedDataShape();
 
+    const expense = db.data.expenses.find((e) => e.id === expenseId);
     db.data.expenses = db.data.expenses.filter((e) => e.id !== expenseId);
+    appendAuditLog(
+        "delete",
+        "expense",
+        expenseId,
+        expense ? `Gasto eliminado: ${expense.concept}` : "Gasto eliminado",
+    );
 
     await db.write();
+});
+
+// =========================
+// CIERRE DE CAJA, PRODUCTOS Y AUDITORIA
+// =========================
+
+ipcMain.handle("get-cash-closures", async () => {
+    await db.read();
+    ensureExtendedDataShape();
+
+    return db.data.cash_closures || [];
+});
+
+ipcMain.handle("save-cash-closure", async (_, closure) => {
+    const input = normalizeCashClosureForSave(closure);
+
+    await db.read();
+    ensureExtendedDataShape();
+
+    const now = new Date().toISOString();
+    const existingIndex = db.data.cash_closures.findIndex(
+        (item) => item.id === input.id || item.close_date === input.close_date,
+    );
+
+    const savedClosure = {
+        ...(existingIndex >= 0 ? db.data.cash_closures[existingIndex] : {}),
+        ...input,
+        id: input.id || (existingIndex >= 0 ? db.data.cash_closures[existingIndex].id : uuidv4()),
+        created_at:
+            existingIndex >= 0
+                ? db.data.cash_closures[existingIndex].created_at || input.created_at || now
+                : input.created_at || now,
+        updated_at: input.updated_at || now,
+    };
+
+    if (existingIndex >= 0) {
+        db.data.cash_closures[existingIndex] = savedClosure;
+    } else {
+        db.data.cash_closures.push(savedClosure);
+    }
+
+    appendAuditLog(
+        existingIndex >= 0 ? "update" : "create",
+        "cash_closure",
+        savedClosure.id,
+        `Cierre de caja ${savedClosure.close_date} guardado con diferencia $ ${Number(savedClosure.difference || 0).toLocaleString("es-AR")}`,
+    );
+
+    await db.write();
+    return savedClosure;
+});
+
+ipcMain.handle("get-products", async () => {
+    await db.read();
+    ensureExtendedDataShape();
+
+    return db.data.products || [];
+});
+
+ipcMain.handle("save-product", async (_, product) => {
+    const input = normalizeProductForSave(product);
+
+    await db.read();
+    ensureExtendedDataShape();
+
+    const now = new Date().toISOString();
+    const existingIndex = db.data.products.findIndex(
+        (item) => item.id === input.id || item.plu === input.plu,
+    );
+
+    const savedProduct = {
+        ...(existingIndex >= 0 ? db.data.products[existingIndex] : {}),
+        ...input,
+        id: input.id || (existingIndex >= 0 ? db.data.products[existingIndex].id : uuidv4()),
+        created_at:
+            existingIndex >= 0
+                ? db.data.products[existingIndex].created_at || input.created_at || now
+                : input.created_at || now,
+        updated_at: input.updated_at || now,
+    };
+
+    if (existingIndex >= 0) {
+        db.data.products[existingIndex] = savedProduct;
+    } else {
+        db.data.products.push(savedProduct);
+    }
+
+    appendAuditLog(
+        existingIndex >= 0 ? "update" : "create",
+        "product",
+        savedProduct.id,
+        `Producto PLU ${savedProduct.plu} guardado: ${savedProduct.name}`,
+    );
+
+    await db.write();
+    return savedProduct;
+});
+
+ipcMain.handle("delete-product", async (_, id) => {
+    const productId = normalizeId(id);
+
+    await db.read();
+    ensureExtendedDataShape();
+
+    const product = db.data.products.find((item) => item.id === productId);
+    db.data.products = db.data.products.filter((item) => item.id !== productId);
+
+    appendAuditLog(
+        "delete",
+        "product",
+        productId,
+        product ? `Producto PLU ${product.plu} eliminado` : "Producto eliminado",
+    );
+
+    await db.write();
+});
+
+ipcMain.handle("get-scanner-config", async () => {
+    await db.read();
+    ensureExtendedDataShape();
+
+    return db.data.scanner_config;
+});
+
+ipcMain.handle("save-scanner-config", async (_, config) => {
+    const input = normalizeScannerConfig(config);
+
+    await db.read();
+    ensureExtendedDataShape();
+
+    db.data.scanner_config = {
+        ...getDefaultScannerConfig(),
+        ...input,
+        updated_at: new Date().toISOString(),
+    };
+
+    appendAuditLog("update", "scanner_config", "scanner_config", "Configuracion del escaner actualizada");
+
+    await db.write();
+    return db.data.scanner_config;
+});
+
+ipcMain.handle("get-audit-logs", async (_, limit = 80) => {
+    await db.read();
+    ensureExtendedDataShape();
+
+    const safeLimit = Math.max(1, Math.min(500, Number(limit) || 80));
+
+    return [...(db.data.audit_logs || [])]
+        .sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))
+        .slice(0, safeLimit);
 });
 
 // =========================
@@ -1051,6 +1541,80 @@ ipcMain.handle("toggle-license", async (_, id, status) => {
         .eq("id", licenseId);
 
     return !error;
+});
+
+ipcMain.handle("update-license-email", async (_, id, email) => {
+    try {
+        const licenseId = normalizeLicenseRecordId(id);
+        const safeEmail = normalizeEmail(email);
+
+        const { data: currentLicense, error: currentError } = await supabase
+            .from("licenses")
+            .select("id, email, license_key, active, device_id")
+            .eq("id", licenseId)
+            .single();
+
+        if (currentError || !currentLicense) {
+            return {
+                ok: false,
+                message: "No se encontro la licencia.",
+            };
+        }
+
+        if (String(currentLicense.email || "").toLowerCase() === safeEmail) {
+            return {
+                ok: true,
+                message: "El email ya estaba cargado en esta licencia.",
+                license: currentLicense,
+            };
+        }
+
+        const { data: duplicateEmails, error: duplicateError } = await supabase
+            .from("licenses")
+            .select("id")
+            .eq("email", safeEmail)
+            .neq("id", licenseId)
+            .limit(1);
+
+        if (duplicateError) {
+            return {
+                ok: false,
+                message: duplicateError.message || "No se pudo validar el email.",
+            };
+        }
+
+        if (duplicateEmails?.length) {
+            return {
+                ok: false,
+                message: "Ese email ya esta usado por otra licencia.",
+            };
+        }
+
+        const { data: updatedLicense, error: updateError } = await supabase
+            .from("licenses")
+            .update({ email: safeEmail })
+            .eq("id", licenseId)
+            .select("id, email, license_key, active, device_id")
+            .single();
+
+        if (updateError || !updatedLicense) {
+            return {
+                ok: false,
+                message: updateError?.message || "No se pudo actualizar el email.",
+            };
+        }
+
+        return {
+            ok: true,
+            message: "Email actualizado sin cambiar la licencia ni los datos del cliente.",
+            license: updatedLicense,
+        };
+    } catch (err) {
+        return {
+            ok: false,
+            message: err.message || "No se pudo actualizar el email.",
+        };
+    }
 });
 
 ipcMain.handle("delete-license", async (_, id) => {
@@ -1311,23 +1875,49 @@ ipcMain.handle("restore-cloud-backup", async (_, data) => {
 
 ipcMain.handle("restore-data", async (_, backup) => {
     try {
-        const { sales, expenses } = normalizeBackupData(backup);
+        const { sales, expenses, cash_closures, products, audit_logs, scanner_config } =
+            normalizeBackupData(backup);
         const restoredAt = new Date().toISOString();
 
         // 🔥 LEER DB
         await db.read();
+        ensureExtendedDataShape();
 
         // 🔥 REEMPLAZAR DATOS
         db.data.sales = sales.map((sale) => ({
             ...sale,
             id: sale.id || uuidv4(),
+            created_at: sale.created_at || restoredAt,
             updated_at: sale.updated_at || restoredAt,
         }));
         db.data.expenses = expenses.map((expense) => ({
             ...expense,
             id: expense.id || uuidv4(),
+            created_at: expense.created_at || restoredAt,
             updated_at: expense.updated_at || restoredAt,
         }));
+
+        db.data.cash_closures = cash_closures.map((closure) => ({
+            ...closure,
+            id: closure.id || uuidv4(),
+            created_at: closure.created_at || restoredAt,
+            updated_at: closure.updated_at || restoredAt,
+        }));
+        db.data.products = products.map((product) => ({
+            ...product,
+            id: product.id || uuidv4(),
+            created_at: product.created_at || restoredAt,
+            updated_at: product.updated_at || restoredAt,
+        }));
+        db.data.audit_logs = audit_logs.map((log) => ({
+            ...log,
+            id: log.id || uuidv4(),
+            created_at: log.created_at || restoredAt,
+        }));
+        db.data.scanner_config = {
+            ...getDefaultScannerConfig(),
+            ...(scanner_config || {}),
+        };
 
         // 🔥 GUARDAR
         await db.write();
@@ -1338,5 +1928,46 @@ ipcMain.handle("restore-data", async (_, backup) => {
     } catch (err) {
         console.error("❌ restore error:", err);
         return false;
+    }
+});
+
+ipcMain.handle("export-diagnostics", async (_, context) => {
+    try {
+        await db.read();
+        const payload = createDiagnosticsPayload(context);
+        const fileStamp = new Date()
+            .toISOString()
+            .replace(/[:.]/g, "-")
+            .replace("T", "_")
+            .slice(0, 19);
+        const dialogOptions = {
+            title: "Guardar diagnostico de izTrack",
+            defaultPath: path.join(app.getPath("desktop"), `iztrack-diagnostico-${fileStamp}.json`),
+            filters: [{ name: "JSON", extensions: ["json"] }],
+        };
+        const result = mainWindow
+            ? await dialog.showSaveDialog(mainWindow, dialogOptions)
+            : await dialog.showSaveDialog(dialogOptions);
+
+        if (result.canceled || !result.filePath) {
+            return {
+                ok: false,
+                cancelled: true,
+                message: "Exportacion cancelada.",
+            };
+        }
+
+        fs.writeFileSync(result.filePath, JSON.stringify(payload, null, 2), "utf8");
+
+        return {
+            ok: true,
+            path: result.filePath,
+            message: "Diagnostico exportado correctamente.",
+        };
+    } catch (err) {
+        return {
+            ok: false,
+            message: err.message || "No se pudo exportar el diagnostico.",
+        };
     }
 });

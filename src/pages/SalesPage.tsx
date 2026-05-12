@@ -6,6 +6,7 @@ import {
   Barcode,
   CheckCircle,
   CreditCard,
+  Filter,
   Landmark,
   Pencil,
   Plus,
@@ -20,9 +21,16 @@ import {
   PaymentMethod,
   PAYMENT_METHOD_LABELS,
   PAYMENT_METHOD_COLORS,
+  Product,
+  ScannerConfig,
 } from "../lib/types";
 
 import { formatCurrency, todayStr, formatDate } from "../lib/utils";
+import {
+  DEFAULT_SCANNER_CONFIG,
+  getScaleBarcodeError,
+  parseScaleBarcode,
+} from "../lib/scaleBarcode";
 import { Modal } from "../components/ui/Modal";
 import { Button } from "../components/ui/Button";
 import { Badge } from "../components/ui/Badge";
@@ -35,6 +43,18 @@ const PAYMENT_METHODS: PaymentMethod[] = [
   "credit",
   "transfer",
   "digital_wallet",
+];
+
+type SalePaymentFilter = "all" | "card" | PaymentMethod;
+
+const SALE_FILTER_OPTIONS: Array<{ value: SalePaymentFilter; label: string }> = [
+  { value: "all", label: "Todas" },
+  { value: "cash", label: "Efectivo" },
+  { value: "card", label: "Tarjeta" },
+  { value: "debit", label: "Debito" },
+  { value: "credit", label: "Credito" },
+  { value: "transfer", label: "Transferencia" },
+  { value: "digital_wallet", label: "Billetera" },
 ];
 
 const METHOD_ICONS: Record<PaymentMethod, JSX.Element> = {
@@ -59,12 +79,6 @@ interface SaleAlert {
 
 interface ScannedTicket {
   id: string;
-  code: string;
-  amount: number;
-  label: string;
-}
-
-interface BarcodeParseResult {
   code: string;
   amount: number;
   label: string;
@@ -96,57 +110,18 @@ function formatMoney(value: string | number) {
   return number ? number.toLocaleString("es-AR") : "";
 }
 
-function isValidEan13(code: string) {
-  if (!/^\d{13}$/.test(code)) return false;
-
-  const digits = code.split("").map(Number);
-  const checkDigit = digits[12];
-  const sum = digits
-    .slice(0, 12)
-    .reduce((total, digit, index) => total + digit * (index % 2 === 0 ? 1 : 3), 0);
-  const expected = (10 - (sum % 10)) % 10;
-
-  return checkDigit === expected;
+function getSaleSortTime(sale: Sale) {
+  const time = new Date(sale.created_at || sale.updated_at || "").getTime();
+  return Number.isFinite(time) ? time : 0;
 }
 
-function normalizeBarcodeDigits(rawValue: string) {
-  const digits = rawValue.replace(/\D/g, "");
-  return digits.length > 13 ? digits.slice(-13) : digits;
-}
-
-function parseScaleBarcode(rawValue: string): BarcodeParseResult | null {
-  const code = normalizeBarcodeDigits(rawValue);
-
-  if (!/^2\d{12}$/.test(code) || !isValidEan13(code)) return null;
-
-  const plu = code.slice(1, 7);
-  const amount = Number(code.slice(7, 12));
-
-  if (!Number.isFinite(amount) || amount <= 0) return null;
-
-  return {
-    code,
-    amount,
-    label: `PLU ${plu}`,
-  };
-}
-
-function getScaleBarcodeError(rawValue: string) {
-  const code = normalizeBarcodeDigits(rawValue);
-
-  if (/^1\d{12}$/.test(code)) {
-    return `El codigo ${code} es el codigo del comprobante y no trae el importe. Escanea el codigo de barras del producto, arriba del TOTAL, que empieza con 2.`;
+function matchesSalePaymentFilter(sale: Sale, filter: SalePaymentFilter) {
+  if (filter === "all") return true;
+  if (filter === "card") {
+    return sale.payment_method === "debit" || sale.payment_method === "credit";
   }
 
-  if (/^\d{13}$/.test(code) && !isValidEan13(code)) {
-    return `El codigo ${code} no paso la validacion EAN-13. Volve a escanear apuntando al codigo completo.`;
-  }
-
-  if (!/^2\d{12}$/.test(code)) {
-    return `El codigo ${code || rawValue} no es un codigo de balanza compatible. Tiene que ser EAN-13 y empezar con 2.`;
-  }
-
-  return `No pude leer el importe del codigo ${code}. Escanea el codigo de barras del producto que empieza con 2.`;
+  return sale.payment_method === filter;
 }
 
 export function SalesPage() {
@@ -158,6 +133,7 @@ export function SalesPage() {
   const [draftBeforeEdit, setDraftBeforeEdit] = useState<SaleDraft | null>(null);
   const [form, setForm] = useState<SaleForm>(emptyForm);
   const [filterDate, setFilterDate] = useState(todayStr());
+  const [salePaymentFilter, setSalePaymentFilter] = useState<SalePaymentFilter>("all");
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [amountPaid, setAmountPaid] = useState("");
   const [surcharge, setSurcharge] = useState(0);
@@ -167,6 +143,8 @@ export function SalesPage() {
   const [barcodeInput, setBarcodeInput] = useState("");
   const [scannedTickets, setScannedTickets] = useState<ScannedTicket[]>([]);
   const [scannerMessage, setScannerMessage] = useState<ScannerMessage | null>(null);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [scannerConfig, setScannerConfig] = useState<ScannerConfig>(DEFAULT_SCANNER_CONFIG);
 
   const scannerInputRef = useRef<HTMLInputElement>(null);
   const scannerBufferRef = useRef("");
@@ -207,7 +185,14 @@ export function SalesPage() {
     setLoading(true);
 
     const data = (await window.api.getSales()) as Sale[];
-    const filtered = data.filter((s) => s.sale_date === filterDate);
+    const filtered = data
+      .map((sale, index) => ({ sale, index }))
+      .filter(({ sale }) => sale.sale_date === filterDate)
+      .sort((a, b) => {
+        const timeDiff = getSaleSortTime(b.sale) - getSaleSortTime(a.sale);
+        return timeDiff || b.index - a.index;
+      })
+      .map(({ sale }) => sale);
 
     setSales(filtered);
     setLoading(false);
@@ -216,6 +201,28 @@ export function SalesPage() {
   useEffect(() => {
     fetchSales();
   }, [fetchSales]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchScannerData() {
+      const [savedProducts, savedConfig] = await Promise.all([
+        window.api.getProducts(),
+        window.api.getScannerConfig(),
+      ]);
+
+      if (cancelled) return;
+
+      setProducts((savedProducts || []) as Product[]);
+      setScannerConfig({ ...DEFAULT_SCANNER_CONFIG, ...(savedConfig || {}) });
+    }
+
+    fetchScannerData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     focusScannerInput();
@@ -376,12 +383,12 @@ export function SalesPage() {
       return;
     }
 
-    const parsed = parseScaleBarcode(value);
+    const parsed = parseScaleBarcode(value, scannerConfig, products);
 
     if (!parsed) {
       setScannerMessage({
         tone: "danger",
-        message: getScaleBarcodeError(value),
+        message: getScaleBarcodeError(value, scannerConfig),
       });
       setBarcodeInput("");
       focusScannerInput();
@@ -541,7 +548,15 @@ export function SalesPage() {
   }
 
   const activeSales = sales.filter((s) => !s.voided);
-  const voidedSales = sales.filter((s) => s.voided);
+  const visibleSales = sales.filter((sale) =>
+    matchesSalePaymentFilter(sale, salePaymentFilter),
+  );
+  const visibleActiveSales = visibleSales.filter((sale) => !sale.voided);
+  const visibleVoidedSales = visibleSales.filter((sale) => sale.voided);
+  const visibleTotal = visibleActiveSales.reduce(
+    (sum, sale) => sum + Number(sale.amount),
+    0,
+  );
 
   const totalByMethod = PAYMENT_METHODS.reduce(
     (acc, m) => {
@@ -576,7 +591,7 @@ export function SalesPage() {
             <div className="min-w-0">
               <p className="text-sm font-semibold text-slate-900">Escaner de balanza</p>
               <p className="text-xs text-blue-800 mt-0.5">
-                Apunta al codigo del producto que empieza con 2. No uses el codigo final que empieza con 1.
+                Apunta al codigo del producto que empieza con {scannerConfig.barcode_prefix}. No uses el codigo final del comprobante.
               </p>
             </div>
           </div>
@@ -933,16 +948,36 @@ export function SalesPage() {
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
           <Card className="flex flex-col h-[68vh] min-h-[560px]">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between gap-4">
+            <div className="p-6 border-b border-slate-100 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <h3 className="font-semibold text-slate-900">
                 Ventas del dia
                 {loading && (
                   <RefreshCw className="inline w-4 h-4 ml-2 animate-spin text-slate-400" />
                 )}
               </h3>
-              <span className="text-sm text-slate-500 whitespace-nowrap">
-                {activeSales.length} activas · {voidedSales.length} anuladas
-              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm text-slate-500">
+                  {visibleActiveSales.length} activas ·{" "}
+                  {visibleVoidedSales.length} anuladas ·{" "}
+                  {formatCurrency(visibleTotal)}
+                </span>
+                <label className="relative">
+                  <Filter className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                  <select
+                    value={salePaymentFilter}
+                    onChange={(e) =>
+                      setSalePaymentFilter(e.target.value as SalePaymentFilter)
+                    }
+                    className="h-9 rounded-lg border border-slate-200 bg-white pl-8 pr-8 text-xs font-medium text-slate-600 outline-none transition-colors hover:bg-slate-50 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  >
+                    {SALE_FILTER_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto">
@@ -954,9 +989,17 @@ export function SalesPage() {
                     Registra la primera venta desde el panel lateral
                   </p>
                 </div>
+              ) : visibleSales.length === 0 && !loading ? (
+                <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+                  <Filter className="w-12 h-12 mb-3 opacity-20" />
+                  <p className="text-sm">Sin ventas para este filtro</p>
+                  <p className="text-xs mt-1">
+                    Cambia el medio de pago para ver otras ventas.
+                  </p>
+                </div>
               ) : (
                 <div className="divide-y divide-slate-50">
-                  {sales.map((sale) => (
+                  {visibleSales.map((sale) => (
                     <div
                       key={sale.id}
                       className={`flex items-center justify-between gap-4 px-6 py-4 hover:bg-slate-50 transition-colors ${

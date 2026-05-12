@@ -8,6 +8,17 @@ const { JSONFile } = require("lowdb/node");
 const DEFAULT_DATA = {
     sales: [],
     expenses: [],
+    cash_closures: [],
+    products: [],
+    audit_logs: [],
+    scanner_config: {
+        barcode_prefix: "2",
+        plu_start: 1,
+        plu_length: 6,
+        amount_start: 7,
+        amount_length: 5,
+        amount_divisor: 1,
+    },
 };
 
 const dbPath = path.join(app.getPath("userData"), "db.json");
@@ -18,6 +29,10 @@ function cloneDefaultData() {
     return {
         sales: [],
         expenses: [],
+        cash_closures: [],
+        products: [],
+        audit_logs: [],
+        scanner_config: { ...DEFAULT_DATA.scanner_config },
     };
 }
 
@@ -25,11 +40,24 @@ function normalizeDataShape(data) {
     return {
         sales: Array.isArray(data?.sales) ? data.sales : [],
         expenses: Array.isArray(data?.expenses) ? data.expenses : [],
+        cash_closures: Array.isArray(data?.cash_closures) ? data.cash_closures : [],
+        products: Array.isArray(data?.products) ? data.products : [],
+        audit_logs: Array.isArray(data?.audit_logs) ? data.audit_logs : [],
+        scanner_config:
+            data?.scanner_config && typeof data.scanner_config === "object"
+                ? { ...DEFAULT_DATA.scanner_config, ...data.scanner_config }
+                : { ...DEFAULT_DATA.scanner_config },
     };
 }
 
 function countRecords(data) {
-    return (data.sales?.length || 0) + (data.expenses?.length || 0);
+    return (
+        (data.sales?.length || 0) +
+        (data.expenses?.length || 0) +
+        (data.cash_closures?.length || 0) +
+        (data.products?.length || 0) +
+        (data.audit_logs?.length || 0)
+    );
 }
 
 function readJsonData(filePath) {
@@ -113,6 +141,20 @@ function mergeData(currentData, incomingData) {
         expenses: mergeRecords(currentData.expenses, incomingData.expenses, [
             "expense_date",
         ]),
+        cash_closures: mergeRecords(
+            currentData.cash_closures,
+            incomingData.cash_closures,
+            ["close_date"],
+        ),
+        products: mergeRecords(currentData.products, incomingData.products, ["plu"]),
+        audit_logs: mergeRecords(currentData.audit_logs, incomingData.audit_logs, [
+            "created_at",
+        ]),
+        scanner_config: {
+            ...DEFAULT_DATA.scanner_config,
+            ...(incomingData.scanner_config || {}),
+            ...(currentData.scanner_config || {}),
+        },
     };
 }
 

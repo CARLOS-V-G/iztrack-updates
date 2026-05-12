@@ -25,6 +25,57 @@ export interface Expense {
   updated_at?: string;
 }
 
+export type CashClosureStatus = 'open' | 'closed';
+
+export type AmountByPaymentMethod = Record<PaymentMethod, number>;
+
+export interface CashClosure {
+  id: string;
+  close_date: string;
+  counted: AmountByPaymentMethod;
+  expected: AmountByPaymentMethod;
+  total_sales: number;
+  total_paid_expenses: number;
+  total_pending_expenses: number;
+  net_profit: number;
+  difference: number;
+  operator_name?: string;
+  notes?: string;
+  status: CashClosureStatus;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Product {
+  id: string;
+  plu: string;
+  name: string;
+  price_per_kg?: number;
+  active: boolean;
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ScannerConfig {
+  barcode_prefix: string;
+  plu_start: number;
+  plu_length: number;
+  amount_start: number;
+  amount_length: number;
+  amount_divisor: number;
+  updated_at?: string;
+}
+
+export interface AuditLog {
+  id: string;
+  action: string;
+  entity: string;
+  entity_id?: string;
+  description?: string;
+  created_at: string;
+}
+
 export interface DailySummary {
   date: string;
   totalSales: number;
@@ -47,7 +98,7 @@ export interface PeriodSummary {
   expensesCount: number;
 }
 
-export type Page = 'dashboard' | 'sales' | 'expenses' | 'reports' | 'charts' | 'settings';
+export type Page = 'dashboard' | 'sales' | 'expenses' | 'cash_closure' | 'reports' | 'charts' | 'settings';
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   cash: 'Efectivo',
