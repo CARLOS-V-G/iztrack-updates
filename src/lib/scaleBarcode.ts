@@ -11,9 +11,9 @@ export interface ScaleBarcodeResult {
 export const DEFAULT_SCANNER_CONFIG: ScannerConfig = {
   barcode_prefix: "2",
   plu_start: 1,
-  plu_length: 6,
-  amount_start: 7,
-  amount_length: 5,
+  plu_length: 5,
+  amount_start: 6,
+  amount_length: 6,
   amount_divisor: 1,
 };
 
@@ -57,7 +57,8 @@ export function parseScaleBarcode(
 
   if (!plu || !Number.isFinite(amount) || amount <= 0) return null;
 
-  const product = products.find((item) => item.active !== false && item.plu === plu);
+  const plu6 = plu.padStart(6, "0");
+  const product = products.find((item) => item.active !== false && item.plu === plu6);
 
   return {
     code,

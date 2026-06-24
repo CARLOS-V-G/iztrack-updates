@@ -14,9 +14,9 @@ const DATA_DELETE_CONFIRM_PHRASE = "ELIMINAR DATOS";
 const DEFAULT_SCANNER_CONFIG = {
     barcode_prefix: "2",
     plu_start: 1,
-    plu_length: 6,
-    amount_start: 7,
-    amount_length: 5,
+    plu_length: 5,
+    amount_start: 6,
+    amount_length: 6,
     amount_divisor: 1,
 };
 

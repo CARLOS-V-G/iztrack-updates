@@ -46,12 +46,13 @@ const supabase = createClient(
 const { db, initDB, dbPath } = require("./db/db.cjs");
 
 // 🔐 HASH ADMIN
-const ADMIN_HASH = "$2b$10$emWYM2L4SgilfgvHCASHeOgp/FwULV3brE8IdSz2w7Hw0P/VCgmR6";
+const ADMIN_HASH = "$2b$10$4AgqlQ1ypkZrzri0hLTlje3m40KZvPAWppOLJsqbB4luiNWtiEWk6";
 
 // 📄 LICENCIA LOCAL
 const licensePath = path.join(app.getPath("userData"), "license.json");
 
 let mainWindow;
+let scannerModeInterval = null;
 
 // =========================
 // 🚫 EVITAR DOBLE INSTANCIA
@@ -580,9 +581,9 @@ function getDefaultScannerConfig() {
     return {
         barcode_prefix: "2",
         plu_start: 1,
-        plu_length: 6,
-        amount_start: 7,
-        amount_length: 5,
+        plu_length: 5,
+        amount_start: 6,
+        amount_length: 6,
         amount_divisor: 1,
     };
 }
@@ -594,6 +595,7 @@ function ensureExtendedDataShape() {
     db.data.cash_closures ||= [];
     db.data.products ||= [];
     db.data.audit_logs ||= [];
+    db.data.deleted_licenses ||= [];
     db.data.scanner_config = {
         ...getDefaultScannerConfig(),
         ...(db.data.scanner_config || {}),
@@ -1081,13 +1083,44 @@ ipcMain.handle("save-license", (_, data) => {
     writeLocalLicense(license);
 });
 
+ipcMain.handle("toggle-scanner-mode", (_, active) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return false;
+
+    if (scannerModeInterval) {
+        clearInterval(scannerModeInterval);
+        scannerModeInterval = null;
+    }
+
+    if (active) {
+        mainWindow.setAlwaysOnTop(true, "floating");
+        scannerModeInterval = setInterval(() => {
+            if (!mainWindow || mainWindow.isDestroyed()) {
+                clearInterval(scannerModeInterval);
+                scannerModeInterval = null;
+                return;
+            }
+            mainWindow.focus();
+        }, 1000);
+    } else {
+        mainWindow.setAlwaysOnTop(false);
+    }
+
+    return true;
+});
+
 ipcMain.handle("get-licenses", async () => {
     const { data, error } = await supabase
         .from("licenses")
         .select("*")
         .order("created_at", { ascending: false });
 
-    return error ? [] : data;
+    if (error) return [];
+
+    await db.read();
+    ensureExtendedDataShape();
+    const deletedIds = new Set(db.data.deleted_licenses || []);
+
+    return data.filter((lic) => !deletedIds.has(lic.id));
 });
 
 ipcMain.handle("validate-license", async (_, data) => {
@@ -1518,17 +1551,42 @@ ipcMain.handle("generate-license", (_, email) => {
 
 ipcMain.handle("create-license", async (_, email) => {
     const safeEmail = normalizeEmail(email);
-    const key = generarLicencia(safeEmail);
 
-    const { error } = await supabase.from("licenses").insert([
-        {
-            email: safeEmail,
-            license_key: key,
-            active: true,
-        },
-    ]);
+    await db.read();
+    ensureExtendedDataShape();
 
-    return error ? null : key;
+    // Una sola licencia por email
+    const { data: existing } = await supabase
+        .from("licenses")
+        .select("id, license_key, active")
+        .eq("email", safeEmail)
+        .maybeSingle();
+
+    if (existing) {
+        // Restaurar si estaba oculta localmente
+        db.data.deleted_licenses = (db.data.deleted_licenses || []).filter((id) => id !== existing.id);
+        await db.write();
+        console.log("📦 Licencia ya existe para", safeEmail, "->", existing.license_key);
+        return existing.license_key;
+    }
+
+    // Generar clave única (base HMAC + timestamp para evitar colisiones)
+    const baseKey = generarLicencia(safeEmail);
+    const uniqueKey = baseKey + "-" + Date.now().toString(36).toUpperCase();
+
+    const { data: inserted, error } = await supabase
+        .from("licenses")
+        .insert([{ email: safeEmail, license_key: uniqueKey, active: true }])
+        .select()
+        .single();
+
+    if (error) {
+        console.log("❌ create-license ERROR:", JSON.stringify(error));
+        return null;
+    }
+
+    console.log("✅ create-license OK:", uniqueKey);
+    return uniqueKey;
 });
 
 ipcMain.handle("toggle-license", async (_, id, status) => {
@@ -1620,12 +1678,21 @@ ipcMain.handle("update-license-email", async (_, id, email) => {
 ipcMain.handle("delete-license", async (_, id) => {
     const licenseId = normalizeLicenseRecordId(id);
 
-    const { error } = await supabase
-        .from("licenses")
-        .delete()
-        .eq("id", licenseId);
+    // Marcar como inactiva en Supabase (best-effort, puede fallar por RLS)
+    await supabase.from("licenses").update({ active: false }).eq("id", licenseId);
 
-    return !error;
+    // Guardar el ID en LowDB para ocultarlo siempre
+    await db.read();
+    ensureExtendedDataShape();
+
+    if (!db.data.deleted_licenses.includes(licenseId)) {
+        db.data.deleted_licenses.push(licenseId);
+    }
+
+    await db.write();
+
+    console.log("🗑️ Licencia oculta localmente:", licenseId);
+    return true;
 });
 
 ipcMain.handle("delete-user-data", async (_, payload) => {

@@ -46,6 +46,7 @@ const api = Object.freeze({
     deleteProduct: (id) => invoke("delete-product", id),
     getScannerConfig: () => invoke("get-scanner-config"),
     saveScannerConfig: (config) => invoke("save-scanner-config", config),
+    toggleScannerMode: (active) => invoke("toggle-scanner-mode", active),
     getAuditLogs: (limit) => invoke("get-audit-logs", limit),
 
     // ===== UPDATER =====

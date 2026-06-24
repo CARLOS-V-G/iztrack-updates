@@ -145,6 +145,7 @@ export function SalesPage() {
   const [scannerMessage, setScannerMessage] = useState<ScannerMessage | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [scannerConfig, setScannerConfig] = useState<ScannerConfig>(DEFAULT_SCANNER_CONFIG);
+  const [scannerMode, setScannerMode] = useState(false);
 
   const scannerInputRef = useRef<HTMLInputElement>(null);
   const scannerBufferRef = useRef("");
@@ -292,6 +293,11 @@ export function SalesPage() {
     window.addEventListener("keydown", handleWindowKeyDown, true);
     return () => window.removeEventListener("keydown", handleWindowKeyDown, true);
   }, []);
+
+  useEffect(() => {
+    window.api.toggleScannerMode(scannerMode);
+    return () => { window.api.toggleScannerMode(false); };
+  }, [scannerMode]);
 
   function updateForm<K extends keyof SaleForm>(key: K, value: SaleForm[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -914,12 +920,25 @@ export function SalesPage() {
         title="Registro de Ventas"
         subtitle={formatDate(filterDate)}
         actions={
-          <input
-            type="date"
-            value={filterDate}
-            onChange={(e) => setFilterDate(e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setScannerMode(!scannerMode)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                scannerMode
+                  ? "bg-green-600 text-white ring-2 ring-green-400"
+                  : "bg-slate-200 text-slate-600 hover:bg-slate-300"
+              }`}
+              title={scannerMode ? "Desactivar modo escaneo" : "Activar modo escaneo continuo"}
+            >
+              {scannerMode ? "📷 Escaneo activo" : "📷 Escanear"}
+            </button>
+            <input
+              type="date"
+              value={filterDate}
+              onChange={(e) => setFilterDate(e.target.value)}
+              className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
         }
       />
 
