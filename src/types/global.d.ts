@@ -43,6 +43,7 @@ declare global {
         dismissedAt: string | null;
         message: string;
         error: string;
+        autoInstallCountdown: number;
     };
 
     type License = {

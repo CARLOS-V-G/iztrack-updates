@@ -65,6 +65,7 @@ const BACKUP_SOURCES = new Set(["manual", "automatic", "migration"]);
 const WIPE_REASON = "admin_requested";
 const UPDATE_GRACE_PERIOD_MS = 24 * 60 * 60 * 1000;
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const AUTO_INSTALL_DELAY_MS = 60 * 1000;
 const UPDATE_STATUS_CHANNEL = "updater:status";
 
 const updateRuntime = {
@@ -79,7 +80,10 @@ const updateRuntime = {
     total: 0,
     message: autoUpdaterLoadError ? "electron-updater no esta instalado." : "",
     error: autoUpdaterLoadError ? autoUpdaterLoadError.message : "",
+    autoInstallCountdown: 0,
 };
+
+let autoInstallTimer = null;
 
 let updaterConfigured = false;
 
@@ -197,7 +201,33 @@ function isNoPublishedUpdateError(error) {
     );
 }
 
+function clearAutoInstallCountdown() {
+    if (autoInstallTimer) {
+        clearInterval(autoInstallTimer);
+        autoInstallTimer = null;
+    }
+    updateRuntime.autoInstallCountdown = 0;
+}
+
+function startAutoInstallCountdown() {
+    clearAutoInstallCountdown();
+
+    updateRuntime.autoInstallCountdown = Math.floor(AUTO_INSTALL_DELAY_MS / 1000);
+    sendUpdateStatus();
+
+    autoInstallTimer = setInterval(() => {
+        updateRuntime.autoInstallCountdown--;
+        sendUpdateStatus();
+
+        if (updateRuntime.autoInstallCountdown <= 0) {
+            clearAutoInstallCountdown();
+            installAppUpdate();
+        }
+    }, 1000);
+}
+
 function markNoUpdateAvailable(message = "No hay actualizaciones disponibles.") {
+    clearAutoInstallCountdown();
     clearUpdateState();
     updateRuntime.state = "not-available";
     updateRuntime.availableVersion = null;
@@ -242,6 +272,7 @@ function getUpdateStatus() {
                 ? "Instala electron-updater para activar actualizaciones."
                 : "Las actualizaciones automaticas se activan en la app instalada.",
         error: updateRuntime.error,
+        autoInstallCountdown: updateRuntime.autoInstallCountdown || 0,
     };
 }
 
@@ -260,8 +291,8 @@ function setupAutoUpdater() {
         return;
     }
 
-    autoUpdater.autoDownload = false;
-    autoUpdater.autoInstallOnAppQuit = false;
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
 
     autoUpdater.on("checking-for-update", () => {
         updateRuntime.state = "checking";
@@ -274,7 +305,7 @@ function setupAutoUpdater() {
         persistUpdateAvailable(info);
         updateRuntime.state = "available";
         updateRuntime.percent = 0;
-        updateRuntime.message = "Hay una nueva version disponible.";
+        updateRuntime.message = "Nueva version detectada, descargando...";
         updateRuntime.error = "";
         sendUpdateStatus();
     });
@@ -299,12 +330,14 @@ function setupAutoUpdater() {
         updateRuntime.state = "downloaded";
         updateRuntime.downloadedVersion = getUpdateInfoVersion(info);
         updateRuntime.percent = 100;
-        updateRuntime.message = "Actualizacion lista para instalar.";
+        updateRuntime.message = "Actualizacion lista, reiniciando...";
         updateRuntime.error = "";
         sendUpdateStatus();
+        startAutoInstallCountdown();
     });
 
     autoUpdater.on("error", (error) => {
+        clearAutoInstallCountdown();
         if (isNoPublishedUpdateError(error)) {
             markNoUpdateAvailable();
             sendUpdateStatus();
@@ -364,6 +397,7 @@ async function checkForAppUpdates() {
 
 async function downloadAppUpdate() {
     setupAutoUpdater();
+    clearAutoInstallCountdown();
 
     if (!autoUpdater || !app.isPackaged) {
         updateRuntime.state = "unsupported";
@@ -402,6 +436,7 @@ async function snapshotBeforeUpdateInstall() {
 
 async function installAppUpdate() {
     setupAutoUpdater();
+    clearAutoInstallCountdown();
 
     if (!autoUpdater || !app.isPackaged || updateRuntime.state !== "downloaded") {
         return getUpdateStatus();
@@ -1030,6 +1065,7 @@ ipcMain.handle("updater:install", async () => {
 });
 
 ipcMain.handle("updater:dismiss", () => {
+    clearAutoInstallCountdown();
     persistUpdateDismissed();
     sendUpdateStatus();
     return getUpdateStatus();

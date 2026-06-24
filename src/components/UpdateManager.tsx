@@ -97,10 +97,14 @@ export function UpdateManager() {
     }
 
     if (status.state === "downloaded") {
+      const countdown = status.autoInstallCountdown || 0;
+      const desc =
+        countdown > 0
+          ? `La descarga termino. izTrack se reiniciara automaticamente en ${countdown} segundos para instalar la actualizacion.`
+          : "La descarga termino. Reinicia izTrack para instalar la nueva version.";
       return {
         title: "Actualizacion lista",
-        description:
-          "La descarga termino. Reinicia izTrack para instalar la nueva version.",
+        description: desc,
         icon: <CheckCircle2 className="h-5 w-5" />,
       };
     }
@@ -269,7 +273,9 @@ export function UpdateManager() {
           {status.state === "downloaded" && (
             <Button onClick={handleInstall} loading={busy} className="flex-1">
               <RotateCcw className="h-4 w-4" />
-              Instalar y reiniciar
+              {status.autoInstallCountdown > 0
+                ? `Reiniciar ahora (${status.autoInstallCountdown}s)`
+                : "Instalar y reiniciar"}
             </Button>
           )}
 
