@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
+  Barcode,
   CheckCircle,
   Clock,
   Cloud,
@@ -158,6 +159,10 @@ export function SettingsPage() {
   const [updateStatus, setUpdateStatus] = useState<AppUpdateStatus | null>(null);
   const [updateBusy, setUpdateBusy] = useState(false);
   const [diagnosticBusy, setDiagnosticBusy] = useState(false);
+  const [scannerConfig, setScannerConfig] = useState<ScannerConfig | null>(null);
+  const [scannerHistory, setScannerHistory] = useState<ScannerHistoryEntry[]>([]);
+  const [scannerBackend, setScannerBackend] = useState("");
+  const [savingScannerConfig, setSavingScannerConfig] = useState(false);
 
   const latestBackup = backups[0];
   const busy = operation !== "idle";
@@ -368,6 +373,18 @@ export function SettingsPage() {
 
     return unsubscribe;
   }, [refreshUpdateStatus]);
+
+  useEffect(() => {
+    Promise.all([
+      window.api.getScannerConfig(),
+      window.api.getScannerHistory(),
+      window.api.getScannerBackend(),
+    ]).then(([config, history, backend]) => {
+      setScannerConfig(config);
+      setScannerHistory(history || []);
+      setScannerBackend(backend);
+    }).catch(() => undefined);
+  }, []);
 
   async function handleCheckUpdates() {
     setUpdateBusy(true);
@@ -689,6 +706,104 @@ export function SettingsPage() {
                 </div>
               )}
             </div>
+          </Card>
+
+          <Card className="p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <Barcode className="text-blue-600" />
+              <div>
+                <h2 className="font-semibold text-slate-800">Escaner</h2>
+                <p className="text-sm text-slate-500">
+                  Configuracion del lector de codigos de barras
+                </p>
+              </div>
+            </div>
+            {scannerConfig && (
+              <div className="text-sm space-y-3">
+                <div className="text-xs text-slate-500 mb-2">
+                  Backend: <span className="font-mono text-slate-700">{scannerBackend || "ninguno"}</span>
+                  {" · "}
+                  {scannerHistory.length} escaneos en esta sesion
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={scannerConfig.auto_open_sale}
+                      onChange={(e) => setScannerConfig({ ...scannerConfig, auto_open_sale: e.target.checked })}
+                      className="rounded"
+                    />
+                    <span className="text-slate-700">Abrir venta automaticamente</span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={scannerConfig.bring_to_front}
+                      onChange={(e) => setScannerConfig({ ...scannerConfig, bring_to_front: e.target.checked })}
+                      className="rounded"
+                    />
+                    <span className="text-slate-700">Traer ventana al frente</span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={scannerConfig.play_sound}
+                      onChange={(e) => setScannerConfig({ ...scannerConfig, play_sound: e.target.checked })}
+                      className="rounded"
+                    />
+                    <span className="text-slate-700">Reproducir sonido</span>
+                  </label>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-slate-500">Metodo de pago por defecto</label>
+                    <select
+                      value={scannerConfig.default_payment_method}
+                      onChange={(e) => setScannerConfig({
+                        ...scannerConfig,
+                        default_payment_method: e.target.value as PaymentMethod | "",
+                      })}
+                      className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs"
+                    >
+                      <option value="">Sin predeterminado</option>
+                      <option value="cash">Efectivo</option>
+                      <option value="debit">Debito</option>
+                      <option value="credit">Credito</option>
+                      <option value="transfer">Transferencia</option>
+                      <option value="digital_wallet">Billetera digital</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500">Intervalo max entre caracteres (ms)</label>
+                    <input
+                      type="number"
+                      value={scannerConfig.max_char_interval}
+                      onChange={(e) => setScannerConfig({
+                        ...scannerConfig,
+                        max_char_interval: Math.max(10, Math.min(2000, Number(e.target.value) || 50)),
+                      })}
+                      className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs"
+                      min={10}
+                      max={2000}
+                    />
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={async () => {
+                    setSavingScannerConfig(true);
+                    try {
+                      await window.api.saveScannerConfig(scannerConfig);
+                    } finally {
+                      setSavingScannerConfig(false);
+                    }
+                  }}
+                  loading={savingScannerConfig}
+                >
+                  Guardar configuracion del escaner
+                </Button>
+              </div>
+            )}
           </Card>
 
           <Card className="p-6 space-y-4">

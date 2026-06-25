@@ -18,6 +18,12 @@ const DEFAULT_SCANNER_CONFIG = {
     amount_start: 6,
     amount_length: 6,
     amount_divisor: 1,
+    auto_open_sale: true,
+    bring_to_front: true,
+    play_sound: true,
+    default_payment_method: "",
+    max_char_interval: 50,
+    min_code_length: 3,
 };
 
 function invalid(message) {
@@ -432,6 +438,11 @@ function normalizeScannerConfig(value) {
         invalid("barcode_prefix debe tener al menos un numero");
     }
 
+    const defaultPayment = config.default_payment_method ?? DEFAULT_SCANNER_CONFIG.default_payment_method;
+    if (defaultPayment !== "" && !PAYMENT_METHODS.has(defaultPayment)) {
+        invalid("default_payment_method invalido");
+    }
+
     return {
         barcode_prefix: barcodePrefix,
         plu_start: normalizeInteger(
@@ -463,6 +474,28 @@ function normalizeScannerConfig(value) {
             "amount_divisor",
             1,
             100000,
+        ),
+        auto_open_sale: config.auto_open_sale !== undefined
+            ? normalizeBoolean(config.auto_open_sale, "auto_open_sale")
+            : DEFAULT_SCANNER_CONFIG.auto_open_sale,
+        bring_to_front: config.bring_to_front !== undefined
+            ? normalizeBoolean(config.bring_to_front, "bring_to_front")
+            : DEFAULT_SCANNER_CONFIG.bring_to_front,
+        play_sound: config.play_sound !== undefined
+            ? normalizeBoolean(config.play_sound, "play_sound")
+            : DEFAULT_SCANNER_CONFIG.play_sound,
+        default_payment_method: defaultPayment,
+        max_char_interval: normalizeInteger(
+            config.max_char_interval ?? DEFAULT_SCANNER_CONFIG.max_char_interval,
+            "max_char_interval",
+            10,
+            2000,
+        ),
+        min_code_length: normalizeInteger(
+            config.min_code_length ?? DEFAULT_SCANNER_CONFIG.min_code_length,
+            "min_code_length",
+            1,
+            50,
         ),
     };
 }

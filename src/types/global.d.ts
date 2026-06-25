@@ -121,7 +121,18 @@ declare global {
         amount_start: number;
         amount_length: number;
         amount_divisor: number;
+        auto_open_sale: boolean;
+        bring_to_front: boolean;
+        play_sound: boolean;
+        default_payment_method: PaymentMethod | "";
+        max_char_interval: number;
+        min_code_length: number;
         updated_at?: string;
+    }
+
+    interface ScannerHistoryEntry {
+        code: string;
+        detected_at: string;
     }
 
     interface AuditLog {
@@ -132,6 +143,17 @@ declare global {
         description?: string;
         created_at: string;
     }
+
+    type MpPayment = {
+        id: string;
+        payment_id: string;
+        amount: number;
+        status: string;
+        payer_email: string;
+        payment_method: string;
+        raw_data: Record<string, unknown>;
+        created_at: string;
+    };
 
     interface DiagnosticExportContext {
         userId?: string | null;
@@ -376,6 +398,13 @@ declare global {
             installUpdate: () => Promise<AppUpdateStatus>;
             dismissUpdate: () => Promise<AppUpdateStatus>;
             onUpdateStatus: (callback: (status: AppUpdateStatus) => void) => () => void;
+
+            toggleScannerMode: (active: boolean) => Promise<boolean>;
+            onBarcode: (callback: (barcode: string) => void) => () => void;
+            setBarcode: (barcode: string) => Promise<boolean>;
+            getScannerHistory: () => Promise<ScannerHistoryEntry[]>;
+            getScannerBackend: () => Promise<string>;
+            onMpPayment: (callback: (payment: MpPayment) => void) => () => void;
 
         };
     }

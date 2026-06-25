@@ -1,7 +1,7 @@
 {
   "name": "iztrack",
   "private": true,
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Sistema de gestion de ventas y caja.",
   "author": "izTrack",
   "type": "module",
@@ -24,7 +24,8 @@
     "copyright": "Copyright 2026 izTrack",
     "asar": true,
     "asarUnpack": [
-      "**/*.node"
+      "**/*.node",
+      "electron/*.ps1"
     ],
     "npmRebuild": true,
     "buildDependenciesFromSource": true,
@@ -82,9 +83,11 @@
     "lucide-react": "^0.344.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "uiohook-napi": "^1.5.5",
     "uuid": "^14.0.0"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.0.4",
     "@eslint/js": "^9.9.1",
     "@types/react": "^18.3.28",
     "@types/react-dom": "^18.3.7",

@@ -7,6 +7,7 @@ import {
   CheckCircle,
   CreditCard,
   Filter,
+  History,
   Landmark,
   Pencil,
   Plus,
@@ -14,6 +15,7 @@ import {
   RotateCcw,
   Smartphone,
   Trash2,
+  X,
 } from "lucide-react";
 
 import {
@@ -101,6 +103,31 @@ interface SaleDraft {
 const emptyForm: SaleForm = { amount: "", payment_method: "", notes: "" };
 const SCANNER_IDLE_MS = 250;
 
+function playBeep(freq = 880, duration = 120) {
+  try {
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    gain.gain.value = 0.15;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + duration / 1000);
+  } catch {
+  }
+}
+
+function playError() {
+  playBeep(220, 300);
+}
+
+function playSuccess() {
+  playBeep(660, 60);
+  setTimeout(() => playBeep(880, 120), 80);
+}
+
 function parseMoney(value: string | number) {
   return Number(String(value).replace(/\D/g, ""));
 }
@@ -146,6 +173,9 @@ export function SalesPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [scannerConfig, setScannerConfig] = useState<ScannerConfig>(DEFAULT_SCANNER_CONFIG);
   const [scannerMode, setScannerMode] = useState(false);
+  const [scannerBackend, setScannerBackend] = useState("");
+  const [scannerHistory, setScannerHistory] = useState<ScannerHistoryEntry[]>([]);
+  const [showScannerHistory, setShowScannerHistory] = useState(false);
 
   const scannerInputRef = useRef<HTMLInputElement>(null);
   const scannerBufferRef = useRef("");
@@ -153,6 +183,7 @@ export function SalesPage() {
   const scannerBlockedRef = useRef(false);
   const barcodeSubmitRef = useRef<(value: string) => void>(() => undefined);
   const quickSaveRef = useRef<() => void>(() => undefined);
+  const scannerConfigRef = useRef<ScannerConfig>(DEFAULT_SCANNER_CONFIG);
 
   const focusScannerInput = useCallback(() => {
     window.setTimeout(() => {
@@ -207,21 +238,33 @@ export function SalesPage() {
     let cancelled = false;
 
     async function fetchScannerData() {
-      const [savedProducts, savedConfig] = await Promise.all([
+      const [savedProducts, savedConfig, history, backend] = await Promise.all([
         window.api.getProducts(),
         window.api.getScannerConfig(),
+        window.api.getScannerHistory(),
+        window.api.getScannerBackend(),
       ]);
 
       if (cancelled) return;
 
       setProducts((savedProducts || []) as Product[]);
-      setScannerConfig({ ...DEFAULT_SCANNER_CONFIG, ...(savedConfig || {}) });
+      const merged = { ...DEFAULT_SCANNER_CONFIG, ...(savedConfig || {}) };
+      setScannerConfig(merged);
+      scannerConfigRef.current = merged;
+      setScannerHistory(history || []);
+      setScannerBackend(backend);
     }
 
     fetchScannerData();
 
+    const interval = setInterval(async () => {
+      const history = await window.api.getScannerHistory();
+      if (!cancelled) setScannerHistory(history || []);
+    }, 3000);
+
     return () => {
       cancelled = true;
+      clearInterval(interval);
     };
   }, []);
 
@@ -298,6 +341,18 @@ export function SalesPage() {
     window.api.toggleScannerMode(scannerMode);
     return () => { window.api.toggleScannerMode(false); };
   }, [scannerMode]);
+
+  useEffect(() => {
+    const unsub = window.api.onBarcode((barcode) => {
+      const config = scannerConfigRef.current;
+      if (config.play_sound) playSuccess();
+      barcodeSubmitRef.current(barcode);
+      if (config.auto_open_sale && !modalOpen && !editSale) {
+        setModalOpen(true);
+      }
+    });
+    return unsub;
+  }, [modalOpen, editSale]);
 
   function updateForm<K extends keyof SaleForm>(key: K, value: SaleForm[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -386,6 +441,7 @@ export function SalesPage() {
         message: "Cierra la edicion antes de escanear tickets para una venta nueva.",
       });
       setBarcodeInput("");
+      if (scannerConfigRef.current.play_sound) playError();
       return;
     }
 
@@ -397,6 +453,7 @@ export function SalesPage() {
         message: getScaleBarcodeError(value, scannerConfig),
       });
       setBarcodeInput("");
+      if (scannerConfigRef.current.play_sound) playError();
       focusScannerInput();
       return;
     }
@@ -414,11 +471,15 @@ export function SalesPage() {
 
     setScannedTickets(nextTickets);
     applyAmountFromScanner(nextAmount);
+
+    const defaultPayment = scannerConfigRef.current.default_payment_method;
+    if (defaultPayment && PAYMENT_METHODS.includes(defaultPayment) && !form.payment_method) {
+      updateForm("payment_method", defaultPayment);
+    }
+
     setScannerMessage({
       tone: "success",
-      message: `Ticket agregado por ${formatCurrency(parsed.amount)}. Total escaneado: ${formatCurrency(
-        nextTickets.reduce((sum, ticket) => sum + ticket.amount, 0),
-      )}.`,
+      message: `Ticket detectado: ${formatCurrency(parsed.amount)}`,
     });
     setBarcodeInput("");
     focusScannerInput();
@@ -612,7 +673,17 @@ export function SalesPage() {
           </button>
         </div>
 
-        <input
+            <div className="flex items-center gap-2">
+              {scannerBackend && scannerMode && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-600 font-mono">
+                  {scannerBackend}
+                </span>
+              )}
+              {scannerMode && (
+                <span className="text-[10px] text-green-600 font-medium">Captura global activa</span>
+              )}
+            </div>
+            <input
           ref={scannerInputRef}
           type="text"
           inputMode="numeric"
@@ -637,7 +708,7 @@ export function SalesPage() {
 
         {scannerMessage && (
           <div
-            className={`rounded-lg border px-3 py-2 text-xs ${
+            className={`rounded-lg border px-3 py-2 text-xs flex items-center gap-2 ${
               scannerMessage.tone === "success"
                 ? "border-green-200 bg-green-50 text-green-700"
                 : scannerMessage.tone === "warning"
@@ -645,7 +716,8 @@ export function SalesPage() {
                   : "border-red-200 bg-red-50 text-red-700"
             }`}
           >
-            {scannerMessage.message}
+            <span>{scannerMessage.tone === "success" ? "✓" : "✗"}</span>
+            <span>{scannerMessage.message}</span>
           </div>
         )}
 
@@ -921,17 +993,35 @@ export function SalesPage() {
         subtitle={formatDate(filterDate)}
         actions={
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setScannerMode(!scannerMode)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                scannerMode
-                  ? "bg-green-600 text-white ring-2 ring-green-400"
-                  : "bg-slate-200 text-slate-600 hover:bg-slate-300"
-              }`}
-              title={scannerMode ? "Desactivar modo escaneo" : "Activar modo escaneo continuo"}
-            >
-              {scannerMode ? "📷 Escaneo activo" : "📷 Escanear"}
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setScannerMode(!scannerMode)}
+                className={`relative px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  scannerMode
+                    ? "bg-green-600 text-white ring-2 ring-green-400"
+                    : "bg-slate-200 text-slate-600 hover:bg-slate-300"
+                }`}
+                title={scannerMode ? "Desactivar modo escaneo global" : "Activar modo escaneo global"}
+              >
+                {scannerMode && (
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-400 rounded-full animate-ping" />
+                )}
+                <Barcode className="w-4 h-4 inline mr-1" />
+                {scannerMode ? "Escaneo activo" : "Escanear"}
+              </button>
+              <button
+                onClick={() => setShowScannerHistory(!showScannerHistory)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors relative"
+                title="Historial de escaneos"
+              >
+                <History className="w-4 h-4" />
+                {scannerHistory.length > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-blue-500 rounded-full text-[8px] text-white flex items-center justify-center font-bold">
+                    {Math.min(scannerHistory.length, 9)}
+                  </span>
+                )}
+              </button>
+            </div>
             <input
               type="date"
               value={filterDate}
@@ -942,7 +1032,33 @@ export function SalesPage() {
         }
       />
 
-      <div className="p-8 space-y-6">
+        {showScannerHistory && scannerHistory.length > 0 && (
+          <div className="absolute top-20 right-8 z-50 w-72 max-h-80 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+              <span className="text-sm font-semibold text-slate-700">Ultimos escaneos</span>
+              <button
+                onClick={() => setShowScannerHistory(false)}
+                className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <div className="divide-y divide-slate-50">
+              {scannerHistory.map((entry, i) => (
+                <div key={`${entry.detected_at}-${i}`} className="px-4 py-2.5 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-mono font-medium text-slate-700 truncate">{entry.code}</p>
+                    <p className="text-[10px] text-slate-400">
+                      {new Date(entry.detected_at).toLocaleTimeString("es-AR")}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="p-8 space-y-6">
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
           {PAYMENT_METHODS.map((m) => (
             <Card key={m} className="p-4">

@@ -11,6 +11,7 @@ import LicenseScreen from "./components/LicenseScreen";
 import AdminPanel from "./components/AdminPanel";
 import AdminLogin from "./components/AdminLogin";
 import { UpdateManager } from "./components/UpdateManager";
+import { MercadoPagoNotification } from "./components/MercadoPagoNotification";
 import { restoreBackup } from "./lib/cloudBackup";
 import { syncData } from "./lib/cloudSync";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -334,6 +335,7 @@ function App() {
       <>
         <LicenseScreen />
         <UpdateManager />
+        <MercadoPagoNotification />
       </>
     );
   }
@@ -355,6 +357,7 @@ function App() {
         {pages[currentPage]}
       </Layout>
       <UpdateManager />
+      <MercadoPagoNotification />
     </>
   );
 }

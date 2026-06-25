@@ -64,6 +64,12 @@ export interface ScannerConfig {
   amount_start: number;
   amount_length: number;
   amount_divisor: number;
+  auto_open_sale: boolean;
+  bring_to_front: boolean;
+  play_sound: boolean;
+  default_payment_method: PaymentMethod | "";
+  max_char_interval: number;
+  min_code_length: number;
   updated_at?: string;
 }
 

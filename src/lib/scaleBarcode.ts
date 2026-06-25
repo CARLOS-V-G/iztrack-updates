@@ -15,6 +15,12 @@ export const DEFAULT_SCANNER_CONFIG: ScannerConfig = {
   amount_start: 6,
   amount_length: 6,
   amount_divisor: 1,
+  auto_open_sale: true,
+  bring_to_front: true,
+  play_sound: true,
+  default_payment_method: "",
+  max_char_interval: 50,
+  min_code_length: 3,
 };
 
 export function isValidEan13(code: string) {

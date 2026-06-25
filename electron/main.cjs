@@ -13,6 +13,7 @@ try {
     autoUpdaterLoadError = err;
 }
 
+const barcodeScanner = require("./barcode-scanner.cjs");
 const { createClient } = require("@supabase/supabase-js");
 const bcrypt = require("bcryptjs");
 const {
@@ -52,7 +53,8 @@ const ADMIN_HASH = "$2b$10$4AgqlQ1ypkZrzri0hLTlje3m40KZvPAWppOLJsqbB4luiNWtiEWk6
 const licensePath = path.join(app.getPath("userData"), "license.json");
 
 let mainWindow;
-let scannerModeInterval = null;
+const BARCODE_CHANNEL = "mp:barcode";
+const scannerHistory = [];
 
 // =========================
 // 🚫 EVITAR DOBLE INSTANCIA
@@ -67,6 +69,7 @@ const UPDATE_GRACE_PERIOD_MS = 24 * 60 * 60 * 1000;
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const AUTO_INSTALL_DELAY_MS = 60 * 1000;
 const UPDATE_STATUS_CHANNEL = "updater:status";
+const MP_PAYMENT_CHANNEL = "mp:payment";
 
 const updateRuntime = {
     state: autoUpdater ? "idle" : "unsupported",
@@ -94,6 +97,7 @@ if (!gotTheLock) {
         await initDB();
         createWindow();
         setupAutoUpdater();
+        setupMpPaymentsRealtime();
     });
 
     app.on("second-instance", () => {
@@ -620,6 +624,12 @@ function getDefaultScannerConfig() {
         amount_start: 6,
         amount_length: 6,
         amount_divisor: 1,
+        auto_open_sale: true,
+        bring_to_front: true,
+        play_sound: true,
+        default_payment_method: "",
+        max_char_interval: 50,
+        min_code_length: 3,
     };
 }
 
@@ -1042,6 +1052,7 @@ async function completeRemoteDataWipe(userId) {
 }
 
 app.on("window-all-closed", () => {
+    barcodeScanner.stop();
     if (process.platform !== "darwin") app.quit();
 });
 
@@ -1122,26 +1133,49 @@ ipcMain.handle("save-license", (_, data) => {
 ipcMain.handle("toggle-scanner-mode", (_, active) => {
     if (!mainWindow || mainWindow.isDestroyed()) return false;
 
-    if (scannerModeInterval) {
-        clearInterval(scannerModeInterval);
-        scannerModeInterval = null;
-    }
-
     if (active) {
-        mainWindow.setAlwaysOnTop(true, "floating");
-        scannerModeInterval = setInterval(() => {
-            if (!mainWindow || mainWindow.isDestroyed()) {
-                clearInterval(scannerModeInterval);
-                scannerModeInterval = null;
-                return;
-            }
+        const hwndBuf = mainWindow.getNativeWindowHandle();
+        const hwnd = hwndBuf.readUInt32LE(0);
+        const ok = barcodeScanner.start((barcode) => {
+            if (!mainWindow || mainWindow.isDestroyed()) return;
+
+            scannerHistory.push({
+                code: barcode,
+                detected_at: new Date().toISOString(),
+            });
+            if (scannerHistory.length > 100) scannerHistory.shift();
+
+            mainWindow.show();
             mainWindow.focus();
-        }, 1000);
-    } else {
-        mainWindow.setAlwaysOnTop(false);
+            mainWindow.moveTop();
+            mainWindow.webContents.send(BARCODE_CHANNEL, barcode);
+        }, hwnd);
+        return ok;
     }
 
+    barcodeScanner.stop();
     return true;
+});
+
+ipcMain.handle("set-barcode", (_, barcode) => {
+    if (mainWindow && !mainWindow.isDestroyed() && typeof barcode === "string") {
+        if (barcodeScanner.isActive()) {
+            mainWindow.show();
+            mainWindow.focus();
+            mainWindow.moveTop();
+        }
+        mainWindow.webContents.send(BARCODE_CHANNEL, barcode);
+        return true;
+    }
+    return false;
+});
+
+ipcMain.handle("get-scanner-history", () => {
+    return [...scannerHistory];
+});
+
+ipcMain.handle("get-scanner-backend", () => {
+    return barcodeScanner.getBackendName();
 });
 
 ipcMain.handle("get-licenses", async () => {
@@ -2073,4 +2107,63 @@ ipcMain.handle("export-diagnostics", async (_, context) => {
             message: err.message || "No se pudo exportar el diagnostico.",
         };
     }
+});
+
+// =========================
+// 💳 MERCADO PAGO
+// =========================
+
+let mpRealtimeSubscription = null;
+
+function setupMpPaymentsRealtime() {
+    if (mpRealtimeSubscription) return;
+    if (!app.isPackaged) return;
+
+    const channel = supabase
+        .channel("mp-payments-realtime")
+        .on(
+            "postgres_changes",
+            { event: "INSERT", schema: "public", table: "mp_payments" },
+            (payload) => {
+                if (!mainWindow || mainWindow.isDestroyed()) return;
+                const payment = {
+                    id: payload.new.id,
+                    payment_id: payload.new.payment_id,
+                    amount: Number(payload.new.amount),
+                    status: payload.new.status,
+                    payer_email: payload.new.payer_email || "",
+                    payment_method: payload.new.payment_method || "",
+                    raw_data: payload.new.raw_data || {},
+                    created_at: payload.new.created_at,
+                };
+                mainWindow.webContents.send(MP_PAYMENT_CHANNEL, payment);
+            },
+        )
+        .subscribe();
+
+    mpRealtimeSubscription = channel;
+}
+
+ipcMain.handle("get-mp-payments", async () => {
+    const { data, error } = await supabase
+        .from("mp_payments")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+    if (error) {
+        console.error("Error fetching MP payments:", error.message);
+        return [];
+    }
+
+    return (data || []).map((p) => ({
+        id: p.id,
+        payment_id: p.payment_id,
+        amount: Number(p.amount),
+        status: p.status,
+        payer_email: p.payer_email || "",
+        payment_method: p.payment_method || "",
+        raw_data: p.raw_data || {},
+        created_at: p.created_at,
+    }));
 });
