@@ -120,7 +120,7 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
             <p className="text-slate-400 text-xs font-medium">Sistema activo</p>
           </div>
           <div className="flex items-center justify-between">
-            <p className="text-white text-xs font-medium">v1.0.7</p>
+            <p className="text-white text-xs font-medium">v1.2.0</p>
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-400 font-mono">stable</span>
           </div>
           <p className="text-slate-500 text-[10px] mt-2 leading-tight">
