@@ -104,7 +104,7 @@ export interface PeriodSummary {
   expensesCount: number;
 }
 
-export type Page = 'dashboard' | 'sales' | 'expenses' | 'cash_closure' | 'reports' | 'charts' | 'settings';
+export type Page = 'dashboard' | 'sales' | 'gmail' | 'mercadopago' | 'expenses' | 'cash_closure' | 'reports' | 'charts' | 'settings';
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   cash: 'Efectivo',

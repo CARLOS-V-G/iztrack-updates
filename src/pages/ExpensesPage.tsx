@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   CalendarClock,
+  CalendarDays,
   CheckCircle,
   Clock,
   ListTodo,
@@ -64,19 +65,19 @@ const emptyForm: ExpenseForm = {
 
 const toneClasses = {
   green: {
-    icon: "bg-green-100 text-green-700",
+    icon: "bg-gradient-to-br from-green-500 to-green-600 text-white shadow-sm",
     value: "text-green-700",
   },
   amber: {
-    icon: "bg-amber-100 text-amber-700",
+    icon: "bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-sm",
     value: "text-amber-700",
   },
   blue: {
-    icon: "bg-blue-100 text-blue-700",
+    icon: "bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-sm",
     value: "text-blue-700",
   },
   slate: {
-    icon: "bg-slate-100 text-slate-700",
+    icon: "bg-gradient-to-br from-slate-500 to-slate-600 text-white shadow-sm",
     value: "text-slate-900",
   },
 };
@@ -107,19 +108,27 @@ function getPendingLabel(days: number) {
   return `${days} dias pendiente`;
 }
 
+const statBarColors: Record<string, string> = {
+  green: "bg-green-500",
+  amber: "bg-amber-500",
+  blue: "bg-blue-500",
+  slate: "bg-slate-500",
+};
+
 function StatCard({ title, value, subtitle, icon, tone }: StatCardProps) {
   const classes = toneClasses[tone];
 
   return (
-    <Card className="p-5">
+    <Card className="p-5 h-full hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 group relative overflow-hidden">
+      <div className={`absolute top-0 left-0 w-1 h-full ${statBarColors[tone]} opacity-60 group-hover:opacity-100 transition-opacity duration-300`} />
       <div className="flex items-center gap-3">
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${classes.icon}`}>
+        <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-sm transition-all duration-300 group-hover:scale-110 group-hover:shadow-md ${classes.icon}`}>
           {icon}
         </div>
         <div className="min-w-0">
           <p className="text-xs font-medium text-slate-500">{title}</p>
-          <p className={`text-xl font-bold truncate ${classes.value}`}>{value}</p>
-          <p className="text-xs text-slate-400 truncate">{subtitle}</p>
+          <p className={`text-xl font-bold truncate mt-0.5 transition-all duration-300 group-hover:scale-[1.02] origin-left ${classes.value}`}>{value}</p>
+          <p className="text-xs text-slate-400 truncate mt-1">{subtitle}</p>
         </div>
       </div>
     </Card>
@@ -323,12 +332,15 @@ export function ExpensesPage() {
         subtitle={formatDate(filterDate)}
         actions={
           <div className="flex items-center gap-3">
-            <input
-              type="date"
-              value={filterDate}
-              onChange={(event) => setFilterDate(event.target.value)}
-              className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+            <div className="relative">
+              <CalendarDays className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              <input
+                type="date"
+                value={filterDate}
+                onChange={(event) => setFilterDate(event.target.value)}
+                className="border border-slate-200 rounded-lg pl-8 pr-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white transition-all"
+              />
+            </div>
             <Button onClick={() => fetchExpenses()} variant="secondary" size="md" title="Actualizar gastos">
               <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
               Actualizar
@@ -341,79 +353,110 @@ export function ExpensesPage() {
         }
       />
 
-      <div className="p-8 space-y-6">
+        <div className="p-8 space-y-6 animate-fade-in">
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
-          <StatCard
-            title="Pagado en el dia"
-            value={formatCurrency(totalPaidToday)}
-            subtitle={`${paidDayExpenses.length} registros pagados`}
-            icon={<CheckCircle className="w-5 h-5" />}
-            tone="green"
-          />
-          <StatCard
-            title="Pendiente total"
-            value={formatCurrency(totalPending)}
-            subtitle={`${pendingExpenses.length} gastos por pagar`}
-            icon={<Clock className="w-5 h-5" />}
-            tone="amber"
-          />
-          <StatCard
-            title="Pendiente del dia"
-            value={formatCurrency(totalPendingToday)}
-            subtitle={`${pendingDayExpenses.length} quedan en esta fecha`}
-            icon={<CalendarClock className="w-5 h-5" />}
-            tone="blue"
-          />
-          <StatCard
-            title="Total del dia"
-            value={formatCurrency(totalDay)}
-            subtitle={`${dayExpenses.length} movimientos cargados`}
-            icon={<ReceiptText className="w-5 h-5" />}
-            tone="slate"
-          />
+          <div className="animate-slide-up" style={{ animationDelay: '0ms' }}>
+            <StatCard
+              title="Pagado en el dia"
+              value={formatCurrency(totalPaidToday)}
+              subtitle={`${paidDayExpenses.length} registros pagados`}
+              icon={<CheckCircle className="w-5 h-5" />}
+              tone="green"
+            />
+          </div>
+          <div className="animate-slide-up" style={{ animationDelay: '50ms' }}>
+            <StatCard
+              title="Pendiente total"
+              value={formatCurrency(totalPending)}
+              subtitle={`${pendingExpenses.length} gastos por pagar`}
+              icon={<Clock className="w-5 h-5" />}
+              tone="amber"
+            />
+          </div>
+          <div className="animate-slide-up" style={{ animationDelay: '100ms' }}>
+            <StatCard
+              title="Pendiente del dia"
+              value={formatCurrency(totalPendingToday)}
+              subtitle={`${pendingDayExpenses.length} quedan en esta fecha`}
+              icon={<CalendarClock className="w-5 h-5" />}
+              tone="blue"
+            />
+          </div>
+          <div className="animate-slide-up" style={{ animationDelay: '150ms' }}>
+            <StatCard
+              title="Total del dia"
+              value={formatCurrency(totalDay)}
+              subtitle={`${dayExpenses.length} movimientos cargados`}
+              icon={<ReceiptText className="w-5 h-5" />}
+              tone="slate"
+            />
+          </div>
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_420px] gap-6 items-start">
-          <Card className="overflow-hidden">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between gap-4">
-              <div>
-                <h3 className="font-semibold text-slate-900">{dayTitle}</h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  Pagados y pendientes cargados para {formatDateShort(filterDate)}.
-                </p>
+          <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 animate-slide-up" style={{ animationDelay: '200ms' }}>
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between gap-4 bg-gradient-to-r from-slate-50/80 to-white">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white shadow-sm">
+                  <ReceiptText className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-slate-900">{dayTitle}</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Pagados y pendientes cargados para {formatDateShort(filterDate)}.
+                  </p>
+                </div>
               </div>
               {loading && <RefreshCw className="w-4 h-4 animate-spin text-slate-400 flex-shrink-0" />}
             </div>
 
             <div className="min-h-[420px] max-h-[64vh] overflow-y-auto scroll-pro">
-              {dayExpenses.length === 0 && !loading ? (
-                <div className="flex flex-col items-center justify-center py-16 px-6 text-center text-slate-400">
-                  <ReceiptText className="w-12 h-12 mb-3 opacity-25" />
+              {loading ? (
+                <div className="p-6 space-y-4 animate-fade-in">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="flex items-center justify-between gap-4 px-2">
+                      <div className="flex items-center gap-3">
+                        <div className="w-2 h-10 rounded-full bg-slate-100 animate-pulse" />
+                        <div className="space-y-2">
+                          <div className="h-3 w-32 rounded bg-slate-100 animate-pulse" />
+                          <div className="h-2.5 w-20 rounded bg-slate-100 animate-pulse" />
+                        </div>
+                      </div>
+                      <div className="h-4 w-20 rounded bg-slate-100 animate-pulse" />
+                    </div>
+                  ))}
+                </div>
+              ) : dayExpenses.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 px-6 text-center text-slate-400 animate-fade-in">
+                  <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mb-4 animate-pulse">
+                    <ReceiptText className="w-7 h-7 text-slate-300" />
+                  </div>
                   <p className="text-sm font-medium text-slate-500">Sin gastos para esta fecha</p>
-                  <p className="text-xs text-slate-400 mt-1">
+                  <p className="text-xs mt-1.5 text-slate-400">
                     Usa Nuevo Gasto para registrar pagos o pendientes.
                   </p>
                 </div>
               ) : (
-                <div className="divide-y divide-slate-50">
-                  {dayExpenses.map((expense) => {
+                <div className="divide-y divide-slate-100 animate-fade-in">
+                  {dayExpenses.map((expense, index) => {
                     const isPaid = expense.status === "paid";
 
                     return (
                       <div
                         key={expense.id}
-                        className="flex items-center justify-between gap-4 px-6 py-4 hover:bg-slate-50 transition-colors"
+                        className="flex items-center justify-between gap-4 px-6 py-4 hover:bg-slate-50/80 transition-all duration-200 group animate-slide-up-sm"
+                        style={{ animationDelay: `${250 + index * 50}ms` }}
                       >
                         <div className="flex items-center gap-4 min-w-0">
                           <div
-                            className={`w-2 h-10 rounded-full flex-shrink-0 ${
+                            className={`w-2 h-10 rounded-full flex-shrink-0 transition-transform duration-200 group-hover:scale-y-110 ${
                               isPaid ? "bg-green-500" : "bg-amber-400"
                             }`}
                           />
 
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-sm font-semibold text-slate-800 truncate">
+                              <span className="text-sm font-semibold text-slate-800 truncate group-hover:text-slate-900 transition-colors duration-200">
                                 {expense.concept}
                               </span>
 
@@ -434,11 +477,11 @@ export function ExpensesPage() {
                             {formatCurrency(Number(expense.amount))}
                           </span>
 
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                             <button
                               type="button"
                               onClick={() => toggleStatus(expense)}
-                              className={`p-1.5 rounded-lg transition-colors ${
+                              className={`p-1.5 rounded-lg transition-all duration-200 hover:scale-110 ${
                                 isPaid
                                   ? "text-slate-400 hover:text-amber-600 hover:bg-amber-50"
                                   : "text-slate-400 hover:text-green-600 hover:bg-green-50"
@@ -451,7 +494,7 @@ export function ExpensesPage() {
                             <button
                               type="button"
                               onClick={() => openEdit(expense)}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-all duration-200 hover:scale-110"
                               title="Editar gasto"
                             >
                               <Pencil className="w-4 h-4" />
@@ -460,7 +503,7 @@ export function ExpensesPage() {
                             <button
                               type="button"
                               onClick={() => setDeleteId(expense.id)}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all duration-200 hover:scale-110"
                               title="Eliminar gasto"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -475,29 +518,31 @@ export function ExpensesPage() {
             </div>
           </Card>
 
-          <Card className="overflow-hidden xl:sticky xl:top-6">
-            <div className="bg-amber-50 border-b border-amber-100 p-5">
+          <Card className="overflow-hidden xl:sticky xl:top-6 hover:shadow-lg transition-all duration-300 animate-slide-up" style={{ animationDelay: '250ms' }}>
+            <div className="bg-gradient-to-br from-amber-50 to-amber-50/80 border-b border-amber-100 p-5">
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <ListTodo className="w-5 h-5 text-amber-700" />
-                    <h3 className="font-semibold text-slate-900">Pendientes a pagar</h3>
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-white shadow-sm flex-shrink-0 mt-0.5">
+                    <ListTodo className="w-4 h-4" />
                   </div>
-                  <p className="text-xs text-amber-800 mt-1">
-                    Siempre visible, aunque cambies la fecha del dia.
-                  </p>
+                  <div>
+                    <h3 className="font-semibold text-slate-900">Pendientes a pagar</h3>
+                    <p className="text-xs text-amber-800/70 mt-0.5">
+                      Siempre visible, aunque cambies la fecha del dia.
+                    </p>
+                  </div>
                 </div>
                 <Badge label={`${pendingExpenses.length} activos`} color={pendingExpenses.length ? "amber" : "green"} />
               </div>
 
               <div className="mt-4 flex items-end justify-between gap-4">
                 <div>
-                  <p className="text-xs text-amber-800">Total pendiente</p>
+                  <p className="text-xs text-amber-800/70">Total pendiente</p>
                   <p className="text-2xl font-bold text-amber-900">{formatCurrency(totalPending)}</p>
                 </div>
                 {urgentPending.length > 0 && (
                   <div className="text-right">
-                    <p className="text-xs text-amber-800">Atencion</p>
+                    <p className="text-xs text-amber-800/70">Atencion</p>
                     <p className="text-sm font-semibold text-amber-900">
                       {urgentPending.length} con 3+ dias
                     </p>
@@ -508,16 +553,16 @@ export function ExpensesPage() {
 
             {recommendedExpense ? (
               <div className="p-5 border-b border-slate-100 bg-white">
-                <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+                <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 hover:shadow-sm transition-all duration-200">
                   <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center flex-shrink-0">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-blue-700 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
                       <AlertTriangle className="w-4 h-4" />
                     </div>
                     <div className="min-w-0">
                       <p className="text-xs font-semibold text-blue-900 uppercase tracking-wide">
                         Recomendado
                       </p>
-                      <p className="text-sm font-semibold text-slate-900 truncate">
+                      <p className="text-sm font-semibold text-slate-900 truncate group-hover:text-blue-900 transition-colors duration-200">
                         Pagar primero: {recommendedExpense.concept}
                       </p>
                       <p className="text-xs text-slate-600 mt-0.5">
@@ -540,8 +585,10 @@ export function ExpensesPage() {
               </div>
             ) : (
               <div className="p-5 border-b border-slate-100">
-                <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-3 flex items-center gap-3">
-                  <CheckCircle className="w-5 h-5 text-green-700 flex-shrink-0" />
+                <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-3 flex items-center gap-3 hover:shadow-sm transition-all duration-200">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-green-600 text-white flex items-center justify-center shadow-sm">
+                    <CheckCircle className="w-4 h-4" />
+                  </div>
                   <div>
                     <p className="text-sm font-semibold text-green-900">Sin pendientes</p>
                     <p className="text-xs text-green-700">Todo lo cargado ya esta pagado.</p>
@@ -552,22 +599,26 @@ export function ExpensesPage() {
 
             <div className="max-h-[54vh] overflow-y-auto scroll-pro">
               {pendingExpenses.length === 0 ? (
-                <div className="px-5 py-10 text-center text-slate-400">
-                  <Wallet className="w-10 h-10 mx-auto mb-3 opacity-25" />
-                  <p className="text-sm">No hay gastos pendientes.</p>
+                <div className="px-5 py-14 text-center text-slate-400 animate-fade-in">
+                  <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-3 animate-pulse">
+                    <Wallet className="w-7 h-7 text-slate-300" />
+                  </div>
+                  <p className="text-sm font-medium text-slate-500">No hay gastos pendientes</p>
+                  <p className="text-xs mt-1 text-slate-400">Todos los gastos estan al dia.</p>
                 </div>
               ) : (
                 <div className="divide-y divide-slate-50">
-                  {pendingExpenses.map((expense) => {
+                  {pendingExpenses.map((expense, index) => {
                     const days = getDaysPending(expense.expense_date, today);
                     const isRecommended = expense.id === recommendedExpense.id;
 
                     return (
-                      <div key={expense.id} className="p-5 hover:bg-slate-50 transition-colors">
+                      <div key={expense.id} className="p-5 hover:bg-slate-50/80 transition-all duration-200 group relative animate-slide-up-sm" style={{ animationDelay: `${300 + index * 50}ms` }}>
+                        <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-amber-300 opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <p className="text-sm font-semibold text-slate-900 truncate">
+                              <p className="text-sm font-semibold text-slate-900 truncate group-hover:text-amber-900 transition-colors duration-200">
                                 {expense.concept}
                               </p>
                               {isRecommended && <Badge label="Recomendado" color="blue" />}
@@ -580,7 +631,7 @@ export function ExpensesPage() {
                             )}
                           </div>
 
-                          <p className="text-base font-bold text-amber-800 flex-shrink-0">
+                          <p className="text-base font-bold text-amber-800 flex-shrink-0 group-hover:scale-105 transition-transform duration-200">
                             {formatCurrency(Number(expense.amount))}
                           </p>
                         </div>
@@ -589,7 +640,7 @@ export function ExpensesPage() {
                           <Button
                             size="sm"
                             variant="success"
-                            className="flex-1"
+                            className="flex-1 transition-all duration-200 hover:shadow-md"
                             onClick={() => toggleStatus(expense)}
                           >
                             <CheckCircle className="w-4 h-4" />
@@ -709,12 +760,12 @@ export function ExpensesPage() {
                     key={status}
                     type="button"
                     onClick={() => updateForm("status", status)}
-                    className={`flex-1 py-2.5 rounded-xl border-2 text-xs font-medium transition-all ${
+                    className={`flex-1 py-2.5 rounded-xl border-2 text-xs font-medium transition-all duration-200 hover:shadow-sm ${
                       form.status === status
                         ? status === "paid"
-                          ? "border-green-600 bg-green-50 text-green-700"
-                          : "border-amber-500 bg-amber-50 text-amber-700"
-                        : "border-slate-200 text-slate-500 hover:border-slate-300"
+                          ? "border-green-600 bg-gradient-to-r from-green-50 to-green-100 text-green-700 shadow-sm"
+                          : "border-amber-500 bg-gradient-to-r from-amber-50 to-amber-100 text-amber-700 shadow-sm"
+                        : "border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50"
                     }`}
                   >
                     {status === "paid" ? "Pagado" : "Pendiente"}

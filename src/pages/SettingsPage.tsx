@@ -467,7 +467,7 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="p-8 space-y-6">
+      <div className="p-8 space-y-6 animate-fade-in">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Configuracion</h1>
@@ -514,9 +514,11 @@ export function SettingsPage() {
 
       <div className="grid xl:grid-cols-[minmax(0,1fr)_360px] gap-6">
         <div className="space-y-6">
-          <Card className="p-6 space-y-4">
+          <Card className="p-6 space-y-4 hover:shadow-lg transition-all duration-300 animate-slide-up" style={{ animationDelay: '0ms' }}>
             <div className="flex items-center gap-3">
-              <Cloud className="text-blue-600" />
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white shadow-sm">
+                <Cloud className="w-4 h-4" />
+              </div>
               <div>
                 <h2 className="font-semibold text-slate-800">
                   Backup en la nube
@@ -528,32 +530,32 @@ export function SettingsPage() {
             </div>
 
             <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-3">
-              <div className="rounded-xl bg-slate-50 border border-slate-200 p-4">
+              <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 hover:border-blue-200 hover:shadow-sm transition-all duration-200 group">
                 <p className="text-xs text-slate-500">Ultimo backup</p>
-                <p className="text-sm font-semibold text-slate-800 mt-1">
+                <p className="text-sm font-semibold text-slate-800 mt-1 group-hover:text-blue-700 transition-colors duration-200">
                   {latestBackup ? formatDateAR(latestBackup.created_at) : "Sin backups"}
                 </p>
               </div>
 
-              <div className="rounded-xl bg-slate-50 border border-slate-200 p-4">
+              <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 hover:border-blue-200 hover:shadow-sm transition-all duration-200 group">
                 <p className="text-xs text-slate-500">Tipo ultimo backup</p>
-                <p className="text-sm font-semibold text-slate-800 mt-1">
+                <p className="text-sm font-semibold text-slate-800 mt-1 group-hover:text-blue-700 transition-colors duration-200">
                   {latestBackup
                     ? getBackupSourceLabel(getBackupRecordSource(latestBackup))
                     : "Sin datos"}
                 </p>
               </div>
 
-              <div className="rounded-xl bg-slate-50 border border-slate-200 p-4">
+              <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 hover:border-green-200 hover:shadow-sm transition-all duration-200 group">
                 <p className="text-xs text-slate-500">Backup automatico</p>
-                <p className="text-sm font-semibold text-green-700 mt-1">
+                <p className="text-sm font-semibold text-green-700 mt-1 group-hover:text-green-800 transition-colors duration-200">
                   Activo cada {AUTO_BACKUP_INTERVAL_MINUTES} min
                 </p>
               </div>
 
-              <div className="rounded-xl bg-slate-50 border border-slate-200 p-4">
+              <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 hover:border-blue-200 hover:shadow-sm transition-all duration-200 group">
                 <p className="text-xs text-slate-500">Proxima referencia</p>
-                <p className="text-sm font-semibold text-slate-800 mt-1">
+                <p className="text-sm font-semibold text-slate-800 mt-1 group-hover:text-blue-700 transition-colors duration-200">
                   {nextAutoBackupAt
                     ? formatDateAR(nextAutoBackupAt)
                     : "Esperando primer backup"}
@@ -586,10 +588,12 @@ export function SettingsPage() {
             </div>
           </Card>
 
-          <Card className="p-6 space-y-4">
+          <Card className="p-6 space-y-4 hover:shadow-lg transition-all duration-300 animate-slide-up" style={{ animationDelay: '100ms' }}>
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <History className="text-slate-600" />
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-slate-500 to-slate-600 flex items-center justify-center text-white shadow-sm">
+                  <History className="w-4 h-4" />
+                </div>
                 <div>
                   <h2 className="font-semibold text-slate-800">
                     Historial de backups
@@ -611,7 +615,7 @@ export function SettingsPage() {
             )}
 
             {backups.length === 0 && operation !== "checking" ? (
-              <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center">
+              <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center hover:border-slate-400 hover:shadow-sm transition-all duration-200">
                 <Cloud className="w-10 h-10 mx-auto text-slate-300 mb-3" />
                 <p className="text-sm font-medium text-slate-700">
                   No hay backups disponibles
@@ -629,7 +633,7 @@ export function SettingsPage() {
                   return (
                     <div
                       key={backup.id}
-                      className="flex items-center justify-between gap-4 bg-slate-50 border border-slate-200 px-4 py-3 rounded-xl"
+                      className="flex items-center justify-between gap-4 bg-slate-50 border border-slate-200 px-4 py-3 rounded-xl hover:bg-slate-100 hover:border-slate-300 transition-all duration-200"
                     >
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -660,7 +664,7 @@ export function SettingsPage() {
                           })
                         }
                         disabled={busy}
-                        className="text-blue-600 text-sm font-medium hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="text-blue-600 text-sm font-medium hover:text-blue-800 hover:underline disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
                       >
                         Restaurar
                       </button>
@@ -673,9 +677,11 @@ export function SettingsPage() {
         </div>
 
         <div className="space-y-6">
-          <Card className="p-6 space-y-4">
+          <Card className="p-6 space-y-4 hover:shadow-lg transition-all duration-300 animate-slide-up" style={{ animationDelay: '200ms' }}>
             <div className="flex items-center gap-3">
-              <Clock className="text-blue-600" />
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-500 to-cyan-600 flex items-center justify-center text-white shadow-sm">
+                <Clock className="w-4 h-4" />
+              </div>
               <h2 className="font-semibold text-slate-800">
                 Estado automatico
               </h2>
@@ -708,9 +714,11 @@ export function SettingsPage() {
             </div>
           </Card>
 
-          <Card className="p-6 space-y-4">
+          <Card className="p-6 space-y-4 hover:shadow-lg transition-all duration-300 animate-slide-up" style={{ animationDelay: '300ms' }}>
             <div className="flex items-center gap-3">
-              <Barcode className="text-blue-600" />
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white shadow-sm">
+                <Barcode className="w-4 h-4" />
+              </div>
               <div>
                 <h2 className="font-semibold text-slate-800">Escaner</h2>
                 <p className="text-sm text-slate-500">
@@ -806,9 +814,11 @@ export function SettingsPage() {
             )}
           </Card>
 
-          <Card className="p-6 space-y-4">
+          <Card className="p-6 space-y-4 hover:shadow-lg transition-all duration-300 animate-slide-up" style={{ animationDelay: '400ms' }}>
             <div className="flex items-center gap-3">
-              <ShieldCheck className="text-green-600" />
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white shadow-sm">
+                <ShieldCheck className="w-4 h-4" />
+              </div>
               <h2 className="font-semibold text-slate-800">Licencia</h2>
             </div>
             <div className="text-sm">
@@ -822,9 +832,11 @@ export function SettingsPage() {
             </div>
           </Card>
 
-          <Card className="p-6 space-y-4">
+          <Card className="p-6 space-y-4 hover:shadow-lg transition-all duration-300 animate-slide-up" style={{ animationDelay: '500ms' }}>
             <div className="flex items-center gap-3">
-              <DownloadCloud className="text-blue-600" />
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center text-white shadow-sm">
+                <DownloadCloud className="w-4 h-4" />
+              </div>
               <h2 className="font-semibold text-slate-800">
                 Actualizaciones
               </h2>
@@ -869,7 +881,7 @@ export function SettingsPage() {
               {updateStatus?.state === "downloading" && (
                 <div className="h-2 overflow-hidden rounded-full bg-slate-100">
                   <div
-                    className="h-full rounded-full bg-blue-600 transition-all duration-300"
+                    className="h-full rounded-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300"
                     style={{ width: `${Math.round(updateStatus.percent)}%` }}
                   />
                 </div>
@@ -911,9 +923,11 @@ export function SettingsPage() {
             </div>
           </Card>
 
-          <Card className="p-6 space-y-4">
+          <Card className="p-6 space-y-4 hover:shadow-lg transition-all duration-300 animate-slide-up" style={{ animationDelay: '600ms' }}>
             <div className="flex items-center gap-3">
-              <Settings className="text-slate-600" />
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-slate-500 to-slate-600 flex items-center justify-center text-white shadow-sm">
+                <Settings className="w-4 h-4" />
+              </div>
               <h2 className="font-semibold text-slate-800">Sistema</h2>
             </div>
             <div className="text-sm text-slate-600">

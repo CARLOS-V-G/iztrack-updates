@@ -65,25 +65,30 @@ interface StatCardProps {
 
 const MONTHS = Array.from({ length: 12 }, (_, index) => index + 1);
 
-const toneClasses: Record<Tone, { icon: string; value: string }> = {
+const toneClasses: Record<Tone, { icon: string; iconContainer: string; value: string }> = {
   blue: {
     icon: "bg-blue-100 text-blue-700",
+    iconContainer: "bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-sm",
     value: "text-blue-700",
   },
   green: {
     icon: "bg-green-100 text-green-700",
+    iconContainer: "bg-gradient-to-br from-emerald-500 to-green-600 text-white shadow-sm",
     value: "text-green-700",
   },
   red: {
     icon: "bg-red-100 text-red-700",
+    iconContainer: "bg-gradient-to-br from-red-500 to-rose-600 text-white shadow-sm",
     value: "text-red-700",
   },
   amber: {
     icon: "bg-amber-100 text-amber-700",
+    iconContainer: "bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-sm",
     value: "text-amber-700",
   },
   slate: {
     icon: "bg-slate-100 text-slate-700",
+    iconContainer: "bg-gradient-to-br from-slate-500 to-slate-600 text-white shadow-sm",
     value: "text-slate-900",
   },
 };
@@ -159,9 +164,9 @@ function StatCard({ title, value, subtitle, icon, tone }: StatCardProps) {
   const classes = toneClasses[tone];
 
   return (
-    <Card className="p-5">
+    <Card className="p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300">
       <div className="flex items-center gap-3">
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${classes.icon}`}>
+        <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${classes.iconContainer}`}>
           {icon}
         </div>
         <div className="min-w-0">
@@ -529,7 +534,7 @@ export function ReportsPage() {
     const movementCount = row.salesCount + row.paidExpensesCount + row.pendingExpensesCount;
 
     return (
-      <tr key={`${row.label}-${index}`} className={index % 2 === 0 ? "bg-white" : "bg-slate-50/70"}>
+      <tr key={`${row.label}-${index}`} className={`${index % 2 === 0 ? "bg-white" : "bg-slate-50/70"} hover:bg-slate-50/80 transition-all duration-150`}>
         <td className="px-5 py-4 align-top">
           <p className="text-sm font-semibold text-slate-800 max-w-xs truncate">{row.label}</p>
           <p className="text-xs text-slate-400 mt-1">
@@ -566,6 +571,26 @@ export function ReportsPage() {
     );
   }
 
+  if (loading) {
+    return (
+      <div className="p-8 space-y-6 animate-fade-in">
+        <div className="h-16 w-64 rounded-xl bg-slate-100 animate-pulse mb-8" />
+        <div className="flex flex-wrap gap-3">
+          <div className="h-10 w-80 rounded-xl bg-slate-100 animate-pulse" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-28 rounded-2xl bg-slate-100 animate-pulse" />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_390px] gap-6">
+          <div className="h-96 rounded-2xl bg-slate-100 animate-pulse" />
+          <div className="h-80 rounded-2xl bg-slate-100 animate-pulse" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
       <PageHeader
@@ -589,7 +614,7 @@ export function ReportsPage() {
         }
       />
 
-      <div className="p-8 space-y-6 print-content">
+      <div className="p-8 space-y-6 animate-fade-in print-content">
         <div className="flex flex-wrap gap-3 items-center no-print">
           <div className="flex bg-slate-100 rounded-xl p-1 gap-1">
             {(["diario", "semanal", "mensual", "anual"] as ReportView[]).map((option) => (
@@ -597,10 +622,10 @@ export function ReportsPage() {
                 key={option}
                 type="button"
                 onClick={() => setView(option)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                   view === option
-                    ? "bg-white text-slate-900 shadow-sm"
-                    : "text-slate-500 hover:text-slate-700"
+                    ? "bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-md"
+                    : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
                 }`}
               >
                 {option === "diario"
@@ -670,47 +695,58 @@ export function ReportsPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
-          <StatCard
-            title="Ventas"
-            value={formatCurrency(totals.sales)}
-            subtitle={`${totals.salesCount} ventas validas`}
-            icon={<TrendingUp className="w-5 h-5" />}
-            tone="blue"
-          />
-          <StatCard
-            title="Gastos pagados"
-            value={formatCurrency(totals.paidExpenses)}
-            subtitle={`${totals.paidExpensesCount} gastos descontados`}
-            icon={<TrendingDown className="w-5 h-5" />}
-            tone="red"
-          />
-          <StatCard
-            title="Ganancia neta"
-            value={formatCurrency(totals.profit)}
-            subtitle={`${formatPercent(margin)} margen del periodo`}
-            icon={<BarChart3 className="w-5 h-5" />}
-            tone={totals.profit >= 0 ? "green" : "red"}
-          />
-          <StatCard
-            title="Pendiente"
-            value={formatCurrency(totals.pendingExpenses)}
-            subtitle={`${totals.pendingExpensesCount} gastos sin pagar`}
-            icon={<Clock className="w-5 h-5" />}
-            tone={totals.pendingExpenses > 0 ? "amber" : "green"}
-          />
+          <div className="animate-slide-up" style={{ animationDelay: '100ms' }}>
+            <StatCard
+              title="Ventas"
+              value={formatCurrency(totals.sales)}
+              subtitle={`${totals.salesCount} ventas validas`}
+              icon={<TrendingUp className="w-5 h-5" />}
+              tone="blue"
+            />
+          </div>
+          <div className="animate-slide-up" style={{ animationDelay: '150ms' }}>
+            <StatCard
+              title="Gastos pagados"
+              value={formatCurrency(totals.paidExpenses)}
+              subtitle={`${totals.paidExpensesCount} gastos descontados`}
+              icon={<TrendingDown className="w-5 h-5" />}
+              tone="red"
+            />
+          </div>
+          <div className="animate-slide-up" style={{ animationDelay: '200ms' }}>
+            <StatCard
+              title="Ganancia neta"
+              value={formatCurrency(totals.profit)}
+              subtitle={`${formatPercent(margin)} margen del periodo`}
+              icon={<BarChart3 className="w-5 h-5" />}
+              tone={totals.profit >= 0 ? "green" : "red"}
+            />
+          </div>
+          <div className="animate-slide-up" style={{ animationDelay: '250ms' }}>
+            <StatCard
+              title="Pendiente"
+              value={formatCurrency(totals.pendingExpenses)}
+              subtitle={`${totals.pendingExpensesCount} gastos sin pagar`}
+              icon={<Clock className="w-5 h-5" />}
+              tone={totals.pendingExpenses > 0 ? "amber" : "green"}
+            />
+          </div>
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_390px] gap-6 items-start">
+          <div className="animate-slide-up" style={{ animationDelay: '300ms' }}>
           <Card className="overflow-hidden">
             <div className="p-6 border-b border-slate-100 flex items-start justify-between gap-4">
-              <div>
-                <h3 className="font-semibold text-slate-900 flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-slate-400" />
-                  {periodTitle}
-                </h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  Ventas, gastos pagados, pendientes y margen por periodo.
-                </p>
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-violet-600 flex items-center justify-center text-white shadow-sm flex-shrink-0">
+                  <FileText className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-slate-900">{periodTitle}</h3>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Ventas, gastos pagados, pendientes y margen por periodo.
+                  </p>
+                </div>
               </div>
               {loading && <RefreshCw className="w-4 h-4 animate-spin text-slate-400 flex-shrink-0" />}
             </div>
@@ -739,7 +775,7 @@ export function ReportsPage() {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-50">
+                <tbody className="divide-y divide-slate-50 animate-fade-in">
                   {data.map((row, index) => renderRow(row, index))}
                   {data.length === 0 && !loading && (
                     <tr>
@@ -778,14 +814,20 @@ export function ReportsPage() {
               </table>
             </div>
           </Card>
+          </div>
 
+          <div className="animate-slide-up" style={{ animationDelay: '350ms' }}>
           <Card className="overflow-hidden xl:sticky xl:top-6 no-print">
             <div className="p-5 border-b border-slate-100 bg-slate-50">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="flex items-center gap-2">
-                    <BarChart3 className="w-5 h-5 text-blue-700" />
-                    <h3 className="font-semibold text-slate-900">Resumen del reporte</h3>
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white shadow-sm">
+                      <BarChart3 className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-slate-900">Resumen del reporte</h3>
+                    </div>
                   </div>
                   <p className="text-xs text-slate-500 mt-1">
                     Lectura rapida y recomendaciones del periodo.
@@ -797,7 +839,7 @@ export function ReportsPage() {
 
             <div className="p-5 border-b border-slate-100">
               <div
-                className={`rounded-xl border px-4 py-3 ${
+                className={`rounded-xl border px-4 py-3 animate-fade-in ${
                   recommendation.tone === "red"
                     ? "border-red-100 bg-red-50"
                     : recommendation.tone === "amber"
@@ -809,7 +851,7 @@ export function ReportsPage() {
               >
                 <div className="flex items-start gap-3">
                   <div
-                    className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm ${
                       recommendation.tone === "red"
                         ? "bg-red-600 text-white"
                         : recommendation.tone === "amber"
@@ -840,18 +882,18 @@ export function ReportsPage() {
 
             <div className="p-5 space-y-4 border-b border-slate-100">
               <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-xl border border-slate-200 px-3 py-3">
+                <div className="rounded-xl border border-slate-200 px-3 py-3 hover:border-green-300 hover:shadow-sm transition-all duration-200 group">
                   <p className="text-xs text-slate-500">Mejor periodo</p>
-                  <p className="text-sm font-semibold text-green-700 truncate">
+                  <p className="text-sm font-semibold text-green-700 truncate group-hover:text-green-800 transition-colors duration-200">
                     {bestRow ? bestRow.label : "-"}
                   </p>
                   <p className="text-xs text-slate-400 mt-1">
                     {bestRow ? formatCurrency(bestRow.netProfit) : formatCurrency(0)}
                   </p>
                 </div>
-                <div className="rounded-xl border border-slate-200 px-3 py-3">
+                <div className="rounded-xl border border-slate-200 px-3 py-3 hover:border-red-300 hover:shadow-sm transition-all duration-200 group">
                   <p className="text-xs text-slate-500">A revisar</p>
-                  <p className="text-sm font-semibold text-red-600 truncate">
+                  <p className="text-sm font-semibold text-red-600 truncate group-hover:text-red-700 transition-colors duration-200">
                     {weakestRow ? weakestRow.label : "-"}
                   </p>
                   <p className="text-xs text-slate-400 mt-1">
@@ -860,7 +902,7 @@ export function ReportsPage() {
                 </div>
               </div>
 
-              <div className="rounded-xl border border-slate-200 px-4 py-3">
+              <div className="rounded-xl border border-slate-200 px-4 py-3 hover:border-slate-300 hover:shadow-sm transition-all duration-200">
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-slate-500">Relacion gastos / ventas</p>
                   <Badge
@@ -879,9 +921,13 @@ export function ReportsPage() {
 
             <div className="p-5">
               <div className="flex items-center justify-between gap-3 mb-3">
-                <div className="flex items-center gap-2">
-                  <Wallet className="w-4 h-4 text-amber-700" />
-                  <h4 className="text-sm font-semibold text-slate-900">Pendientes del reporte</h4>
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-white shadow-sm">
+                    <Wallet className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-slate-900">Pendientes del reporte</h4>
+                  </div>
                 </div>
                 <Badge
                   label={`${totals.pendingExpensesCount} activos`}
@@ -890,7 +936,7 @@ export function ReportsPage() {
               </div>
 
               {pendingRows.length === 0 ? (
-                <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-3 flex items-center gap-3">
+                <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-3 flex items-center gap-3 hover:border-green-200 hover:shadow-sm transition-all duration-200">
                   <CheckCircle className="w-5 h-5 text-green-700 flex-shrink-0" />
                   <div>
                     <p className="text-sm font-semibold text-green-900">Sin pendientes</p>
@@ -902,7 +948,7 @@ export function ReportsPage() {
                   {pendingRows.slice(0, 5).map((row) => (
                     <div
                       key={`${row.label}-pending`}
-                      className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3"
+                      className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 hover:border-amber-200 hover:shadow-sm transition-all duration-200"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
@@ -926,6 +972,7 @@ export function ReportsPage() {
               )}
             </div>
           </Card>
+          </div>
         </div>
       </div>
 

@@ -69,7 +69,6 @@ const UPDATE_GRACE_PERIOD_MS = 24 * 60 * 60 * 1000;
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const AUTO_INSTALL_DELAY_MS = 60 * 1000;
 const UPDATE_STATUS_CHANNEL = "updater:status";
-const MP_PAYMENT_CHANNEL = "mp:payment";
 
 const updateRuntime = {
     state: autoUpdater ? "idle" : "unsupported",
@@ -97,7 +96,7 @@ if (!gotTheLock) {
         await initDB();
         createWindow();
         setupAutoUpdater();
-        setupMpPaymentsRealtime();
+
     });
 
     app.on("second-instance", () => {
@@ -121,10 +120,18 @@ function createWindow() {
             preload: path.join(__dirname, "preload.cjs"),
             contextIsolation: true,
             nodeIntegration: false,
+            webviewTag: true,
         },
     });
 
     mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));
+
+    // Bloquear F12 / Ctrl+Shift+I para que el escáner no abra DevTools
+    mainWindow.webContents.on("before-input-event", (event, input) => {
+        if (input.key === "F12" || (input.control && input.shift && input.key === "I")) {
+            event.preventDefault();
+        }
+    });
 }
 
 // =========================
@@ -2009,7 +2016,6 @@ ipcMain.handle("restore-cloud-backup", async (_, data) => {
     }
 });
 
-
 ipcMain.handle("restore-data", async (_, backup) => {
     try {
         const { sales, expenses, cash_closures, products, audit_logs, scanner_config } =
@@ -2109,61 +2115,3 @@ ipcMain.handle("export-diagnostics", async (_, context) => {
     }
 });
 
-// =========================
-// 💳 MERCADO PAGO
-// =========================
-
-let mpRealtimeSubscription = null;
-
-function setupMpPaymentsRealtime() {
-    if (mpRealtimeSubscription) return;
-    if (!app.isPackaged) return;
-
-    const channel = supabase
-        .channel("mp-payments-realtime")
-        .on(
-            "postgres_changes",
-            { event: "INSERT", schema: "public", table: "mp_payments" },
-            (payload) => {
-                if (!mainWindow || mainWindow.isDestroyed()) return;
-                const payment = {
-                    id: payload.new.id,
-                    payment_id: payload.new.payment_id,
-                    amount: Number(payload.new.amount),
-                    status: payload.new.status,
-                    payer_email: payload.new.payer_email || "",
-                    payment_method: payload.new.payment_method || "",
-                    raw_data: payload.new.raw_data || {},
-                    created_at: payload.new.created_at,
-                };
-                mainWindow.webContents.send(MP_PAYMENT_CHANNEL, payment);
-            },
-        )
-        .subscribe();
-
-    mpRealtimeSubscription = channel;
-}
-
-ipcMain.handle("get-mp-payments", async () => {
-    const { data, error } = await supabase
-        .from("mp_payments")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(50);
-
-    if (error) {
-        console.error("Error fetching MP payments:", error.message);
-        return [];
-    }
-
-    return (data || []).map((p) => ({
-        id: p.id,
-        payment_id: p.payment_id,
-        amount: Number(p.amount),
-        status: p.status,
-        payer_email: p.payer_email || "",
-        payment_method: p.payment_method || "",
-        raw_data: p.raw_data || {},
-        created_at: p.created_at,
-    }));
-});

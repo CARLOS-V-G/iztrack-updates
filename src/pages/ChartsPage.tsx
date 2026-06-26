@@ -185,16 +185,16 @@ function MetricCard({
   tone: "blue" | "green" | "red" | "slate";
   change?: number | null;
 }) {
-  const toneClasses = {
-    blue: "bg-blue-50 text-blue-700",
-    green: "bg-green-50 text-green-700",
-    red: "bg-red-50 text-red-700",
-    slate: "bg-slate-100 text-slate-700",
+  const iconGradients: Record<string, string> = {
+    blue: "bg-gradient-to-br from-blue-500 to-blue-600",
+    green: "bg-gradient-to-br from-green-500 to-green-600",
+    red: "bg-gradient-to-br from-red-500 to-red-600",
+    slate: "bg-gradient-to-br from-slate-500 to-slate-600",
   };
   const changePositive = change !== null && change !== undefined && change >= 0;
 
   return (
-    <Card className="p-5">
+    <Card className="p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs font-medium uppercase text-slate-500">
@@ -205,28 +205,31 @@ function MetricCard({
           </p>
           <p className="text-xs text-slate-500 mt-1">{detail}</p>
           {change !== undefined && (
-            <div
-              className={`inline-flex items-center gap-1 mt-3 text-xs font-semibold ${
-                change === null
-                  ? "text-slate-500"
-                  : changePositive
-                    ? "text-green-700"
-                    : "text-red-700"
-              }`}
-            >
+            <div className="mt-2">
               {change === null ? (
-                <Activity className="w-3.5 h-3.5" />
-              ) : changePositive ? (
-                <ArrowUpRight className="w-3.5 h-3.5" />
+                <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500">
+                  <Activity className="w-3.5 h-3.5" />
+                  Sin base anterior
+                </span>
               ) : (
-                <ArrowDownRight className="w-3.5 h-3.5" />
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
+                  changePositive
+                    ? "bg-green-50 text-green-700"
+                    : "bg-red-50 text-red-700"
+                }`}>
+                  {changePositive ? (
+                    <ArrowUpRight className="w-3.5 h-3.5" />
+                  ) : (
+                    <ArrowDownRight className="w-3.5 h-3.5" />
+                  )}
+                  {formatPercent(change)}
+                </span>
               )}
-              {change === null ? "Sin base anterior" : formatPercent(change)}
             </div>
           )}
         </div>
         <div
-          className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${toneClasses[tone]}`}
+          className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-white shadow-sm ${iconGradients[tone]}`}
         >
           {icon}
         </div>
@@ -453,6 +456,44 @@ export function ChartsPage() {
     color: "#1d4ed8",
   }));
 
+  if (loading) {
+    return (
+      <div>
+        <PageHeader
+          title="Graficos y Analisis"
+          subtitle="Comparacion diaria, semanal, mensual y anual"
+          actions={
+            <Button variant="secondary" onClick={fetchData} disabled={loading}>
+              <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+              Actualizar
+            </Button>
+          }
+        />
+
+        <div className="p-8 space-y-6 animate-fade-in">
+          <div className="h-16 rounded-2xl bg-slate-100 animate-pulse" />
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-32 rounded-2xl bg-slate-100 animate-pulse" />
+            ))}
+          </div>
+          <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-6">
+            <div className="h-80 rounded-2xl bg-slate-100 animate-pulse" />
+            <div className="h-52 rounded-2xl bg-slate-100 animate-pulse" />
+          </div>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <div className="h-64 rounded-2xl bg-slate-100 animate-pulse" />
+            <div className="h-64 rounded-2xl bg-slate-100 animate-pulse" />
+          </div>
+          <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_420px] gap-6">
+            <div className="h-80 rounded-2xl bg-slate-100 animate-pulse" />
+            <div className="h-64 rounded-2xl bg-slate-100 animate-pulse" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
       <PageHeader
@@ -466,7 +507,7 @@ export function ChartsPage() {
         }
       />
 
-      <div className="p-8 space-y-6">
+      <div className="p-8 space-y-6 animate-fade-in">
         <Card className="p-4">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex flex-wrap gap-2">
@@ -474,11 +515,11 @@ export function ChartsPage() {
                 <button
                   key={mode}
                   onClick={() => setViewMode(mode)}
-                  className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                    viewMode === mode
-                      ? "border-blue-600 bg-blue-50 text-blue-700"
-                      : "border-slate-200 text-slate-600 hover:bg-slate-50"
-                  }`}
+                      className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all duration-200 ${
+                        viewMode === mode
+                          ? "border-transparent bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-sm"
+                          : "border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300"
+                      }`}
                 >
                   {VIEW_LABELS[mode]}
                 </button>
@@ -522,240 +563,284 @@ export function ChartsPage() {
         </Card>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          <MetricCard
-            title="Ventas"
-            value={compactMoney(summary.salesTotal)}
-            detail={`${summary.salesCount} operaciones`}
-            icon={<DollarSign className="w-5 h-5" />}
-            tone="blue"
-            change={getChange(
-              summary.salesTotal,
-              previousSummary?.salesTotal || 0,
-            )}
-          />
-          <MetricCard
-            title="Gastos pagos"
-            value={compactMoney(summary.expenseTotal)}
-            detail={`${summary.expenseCount} registros`}
-            icon={<Wallet className="w-5 h-5" />}
-            tone="red"
-            change={getChange(
-              summary.expenseTotal,
-              previousSummary?.expenseTotal || 0,
-            )}
-          />
-          <MetricCard
-            title="Ganancia"
-            value={compactMoney(summary.profit)}
-            detail={`${formatPercent(summary.margin)} de margen`}
-            icon={<TrendingUp className="w-5 h-5" />}
-            tone={summary.profit >= 0 ? "green" : "red"}
-            change={getChange(summary.profit, previousSummary?.profit || 0)}
-          />
-          <MetricCard
-            title="Ticket promedio"
-            value={compactMoney(summary.averageTicket)}
-            detail={`${activePeriods.length} periodos con movimiento`}
-            icon={<CalendarDays className="w-5 h-5" />}
-            tone="slate"
-          />
+          <div className="animate-slide-up" style={{ animationDelay: '0ms' }}>
+            <MetricCard
+              title="Ventas"
+              value={compactMoney(summary.salesTotal)}
+              detail={`${summary.salesCount} operaciones`}
+              icon={<DollarSign className="w-5 h-5" />}
+              tone="blue"
+              change={getChange(
+                summary.salesTotal,
+                previousSummary?.salesTotal || 0,
+              )}
+            />
+          </div>
+          <div className="animate-slide-up" style={{ animationDelay: '100ms' }}>
+            <MetricCard
+              title="Gastos pagos"
+              value={compactMoney(summary.expenseTotal)}
+              detail={`${summary.expenseCount} registros`}
+              icon={<Wallet className="w-5 h-5" />}
+              tone="red"
+              change={getChange(
+                summary.expenseTotal,
+                previousSummary?.expenseTotal || 0,
+              )}
+            />
+          </div>
+          <div className="animate-slide-up" style={{ animationDelay: '200ms' }}>
+            <MetricCard
+              title="Ganancia"
+              value={compactMoney(summary.profit)}
+              detail={`${formatPercent(summary.margin)} de margen`}
+              icon={<TrendingUp className="w-5 h-5" />}
+              tone={summary.profit >= 0 ? "green" : "red"}
+              change={getChange(summary.profit, previousSummary?.profit || 0)}
+            />
+          </div>
+          <div className="animate-slide-up" style={{ animationDelay: '300ms' }}>
+            <MetricCard
+              title="Ticket promedio"
+              value={compactMoney(summary.averageTicket)}
+              detail={`${activePeriods.length} periodos con movimiento`}
+              icon={<CalendarDays className="w-5 h-5" />}
+              tone="slate"
+            />
+          </div>
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-6">
-          <Card className="p-6">
-            <div className="flex items-center justify-between gap-3 mb-5">
-              <div>
-                <h3 className="text-base font-semibold text-slate-900">
-                  Evolucion comparativa
-                </h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  Ventas, gastos pagos y ganancia por {VIEW_LABELS[viewMode].toLowerCase()}
-                </p>
+          <div className="animate-scale-in" style={{ animationDelay: '400ms' }}>
+            <Card className="p-6 hover:shadow-lg transition-all duration-300">
+              <div className="flex items-center justify-between gap-3 mb-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white shadow-sm">
+                    <BarChart3 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-semibold text-slate-900">
+                      Evolucion comparativa
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Ventas, gastos pagos y ganancia por {VIEW_LABELS[viewMode].toLowerCase()}
+                    </p>
+                  </div>
+                </div>
               </div>
-              <BarChart3 className="w-5 h-5 text-slate-400" />
-            </div>
 
-            {chartPeriods.length > 0 ? (
-              <LineChart
-                labels={chartPeriods.map((period) => period.label)}
-                series={[
-                  {
-                    label: "Ventas",
-                    values: chartPeriods.map((period) => period.salesTotal),
-                    color: "#1d4ed8",
-                  },
-                  {
-                    label: "Gastos",
-                    values: chartPeriods.map((period) => period.expenseTotal),
-                    color: "#dc2626",
-                  },
-                  {
-                    label: "Ganancia",
-                    values: chartPeriods.map((period) => period.profit),
-                    color: "#16a34a",
-                  },
-                ]}
-                height={280}
-              />
-            ) : (
-              <div className="flex items-center justify-center h-52 text-slate-400 text-sm">
-                Sin datos para comparar
-              </div>
-            )}
-          </Card>
+              {chartPeriods.length > 0 ? (
+                <LineChart
+                  labels={chartPeriods.map((period) => period.label)}
+                  series={[
+                    {
+                      label: "Ventas",
+                      values: chartPeriods.map((period) => period.salesTotal),
+                      color: "#1d4ed8",
+                    },
+                    {
+                      label: "Gastos",
+                      values: chartPeriods.map((period) => period.expenseTotal),
+                      color: "#dc2626",
+                    },
+                    {
+                      label: "Ganancia",
+                      values: chartPeriods.map((period) => period.profit),
+                      color: "#16a34a",
+                    },
+                  ]}
+                  height={280}
+                />
+              ) : (
+                <div className="flex items-center justify-center h-52 text-slate-400 text-sm">
+                  Sin datos para comparar
+                </div>
+              )}
+            </Card>
+          </div>
 
-          <Card className="p-6 space-y-4">
-            <h3 className="text-base font-semibold text-slate-900">
-              Lectura rapida
-            </h3>
+          <div className="animate-scale-in" style={{ animationDelay: '500ms' }}>
+            <Card className="p-6 space-y-4 hover:shadow-lg transition-all duration-300">
+              <h3 className="text-base font-semibold text-slate-900">
+                Lectura rapida
+              </h3>
 
-            <div className="space-y-3">
-              <div className="rounded-xl bg-green-50 border border-green-100 p-4">
-                <p className="text-xs text-green-700 font-medium">
-                  Mejor ganancia
-                </p>
-                <p className="text-sm font-semibold text-slate-900 mt-1">
-                  {bestProfitPeriod
-                    ? `${bestProfitPeriod.rangeLabel} - ${compactMoney(bestProfitPeriod.profit)}`
-                    : "Sin datos"}
-                </p>
+              <div className="space-y-3">
+                <div className="rounded-xl bg-green-50 border border-green-100 p-4">
+                  <p className="text-xs text-green-700 font-medium">
+                    Mejor ganancia
+                  </p>
+                  <p className="text-sm font-semibold text-slate-900 mt-1">
+                    {bestProfitPeriod
+                      ? `${bestProfitPeriod.rangeLabel} - ${compactMoney(bestProfitPeriod.profit)}`
+                      : "Sin datos"}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-blue-50 border border-blue-100 p-4">
+                  <p className="text-xs text-blue-700 font-medium">
+                    Mayor venta
+                  </p>
+                  <p className="text-sm font-semibold text-slate-900 mt-1">
+                    {bestSalesPeriod
+                      ? `${bestSalesPeriod.rangeLabel} - ${compactMoney(bestSalesPeriod.salesTotal)}`
+                      : "Sin datos"}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-slate-50 border border-slate-200 p-4">
+                  <p className="text-xs text-slate-500 font-medium">
+                    Punto mas bajo
+                  </p>
+                  <p className="text-sm font-semibold text-slate-900 mt-1">
+                    {weakestPeriod
+                      ? `${weakestPeriod.rangeLabel} - ${compactMoney(weakestPeriod.profit)}`
+                      : "Sin datos"}
+                  </p>
+                </div>
               </div>
-              <div className="rounded-xl bg-blue-50 border border-blue-100 p-4">
-                <p className="text-xs text-blue-700 font-medium">
-                  Mayor venta
-                </p>
-                <p className="text-sm font-semibold text-slate-900 mt-1">
-                  {bestSalesPeriod
-                    ? `${bestSalesPeriod.rangeLabel} - ${compactMoney(bestSalesPeriod.salesTotal)}`
-                    : "Sin datos"}
-                </p>
-              </div>
-              <div className="rounded-xl bg-slate-50 border border-slate-200 p-4">
-                <p className="text-xs text-slate-500 font-medium">
-                  Punto mas bajo
-                </p>
-                <p className="text-sm font-semibold text-slate-900 mt-1">
-                  {weakestPeriod
-                    ? `${weakestPeriod.rangeLabel} - ${compactMoney(weakestPeriod.profit)}`
-                    : "Sin datos"}
-                </p>
-              </div>
-            </div>
-          </Card>
+            </Card>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          <Card className="p-6">
-            <h3 className="text-base font-semibold text-slate-900 mb-5">
-              Ventas por periodo
-            </h3>
-            {salesBarData.some((item) => item.value > 0) ? (
-              <BarChart data={salesBarData} height={220} />
-            ) : (
-              <div className="flex items-center justify-center h-40 text-slate-400 text-sm">
-                Sin ventas en el periodo
+          <div className="animate-scale-in" style={{ animationDelay: '400ms' }}>
+            <Card className="p-6 hover:shadow-lg transition-all duration-300">
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center text-white shadow-sm">
+                  <BarChart3 className="w-4 h-4" />
+                </div>
+                <h3 className="text-base font-semibold text-slate-900">
+                  Ventas por periodo
+                </h3>
               </div>
-            )}
-          </Card>
+              {salesBarData.some((item) => item.value > 0) ? (
+                <BarChart data={salesBarData} height={220} />
+              ) : (
+                <div className="flex items-center justify-center h-40 text-slate-400 text-sm">
+                  Sin ventas en el periodo
+                </div>
+              )}
+            </Card>
+          </div>
 
-          <Card className="p-6">
-            <h3 className="text-base font-semibold text-slate-900 mb-5">
-              Ventas por medio de pago
-            </h3>
-            <DonutChart data={paymentMethodData} size={180} />
-          </Card>
+          <div className="animate-scale-in" style={{ animationDelay: '500ms' }}>
+            <Card className="p-6 hover:shadow-lg transition-all duration-300">
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white shadow-sm">
+                  <DollarSign className="w-4 h-4" />
+                </div>
+                <h3 className="text-base font-semibold text-slate-900">
+                  Ventas por medio de pago
+                </h3>
+              </div>
+              <DonutChart data={paymentMethodData} size={180} />
+            </Card>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_420px] gap-6">
-          <Card className="p-6">
-            <div className="flex items-center justify-between gap-3 mb-4">
-              <h3 className="text-base font-semibold text-slate-900">
-                Comparacion detallada
-              </h3>
-              <span className="text-xs text-slate-400">
-                {periods.length} periodos
-              </span>
-            </div>
-            <div className="max-h-[460px] overflow-auto scroll-pro pr-1">
-              <table className="w-full min-w-[720px] text-sm">
-                <thead className="sticky top-0 z-10 bg-white">
-                  <tr className="border-b border-slate-200 text-xs text-slate-500">
-                    <th className="text-left py-3 pr-4 font-medium">Periodo</th>
-                    <th className="text-right py-3 px-4 font-medium">Ventas</th>
-                    <th className="text-right py-3 px-4 font-medium">Gastos</th>
-                    <th className="text-right py-3 px-4 font-medium">Ganancia</th>
-                    <th className="text-right py-3 px-4 font-medium">Ticket</th>
-                    <th className="text-right py-3 pl-4 font-medium">Vs ant.</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {periods.map((period, index) => {
-                    const previous = periods[index - 1];
-                    const change = previous
-                      ? getChange(period.salesTotal, previous.salesTotal)
-                      : null;
-
-                    return (
-                      <tr key={period.key} className="hover:bg-slate-50">
-                        <td className="py-3 pr-4">
-                          <p className="font-medium text-slate-800">
-                            {period.rangeLabel}
-                          </p>
-                          <p className="text-xs text-slate-400">
-                            {period.salesCount} ventas - {period.expenseCount} gastos
-                          </p>
-                        </td>
-                        <td className="py-3 px-4 text-right font-medium text-blue-700">
-                          {compactMoney(period.salesTotal)}
-                        </td>
-                        <td className="py-3 px-4 text-right font-medium text-red-700">
-                          {compactMoney(period.expenseTotal)}
-                        </td>
-                        <td
-                          className={`py-3 px-4 text-right font-semibold ${
-                            period.profit >= 0 ? "text-green-700" : "text-red-700"
-                          }`}
-                        >
-                          {compactMoney(period.profit)}
-                        </td>
-                        <td className="py-3 px-4 text-right text-slate-700">
-                          {compactMoney(period.averageTicket)}
-                        </td>
-                        <td
-                          className={`py-3 pl-4 text-right font-medium ${
-                            change === null
-                              ? "text-slate-400"
-                              : change >= 0
-                                ? "text-green-700"
-                                : "text-red-700"
-                          }`}
-                        >
-                          {change === null ? "-" : formatPercent(change)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-
-          <Card className="p-6">
-            <h3 className="text-base font-semibold text-slate-900 mb-5">
-              Gastos por categoria
-            </h3>
-            {categoryChartData.length > 0 ? (
-              <BarChart
-                data={categoryChartData}
-                height={240}
-                formatValue={(value) => compactMoney(value)}
-              />
-            ) : (
-              <div className="flex items-center justify-center h-40 text-slate-400 text-sm">
-                Sin gastos en el periodo
+          <div className="animate-scale-in" style={{ animationDelay: '400ms' }}>
+            <Card className="p-6 hover:shadow-lg transition-all duration-300">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-violet-600 flex items-center justify-center text-white shadow-sm">
+                    <BarChart3 className="w-4 h-4" />
+                  </div>
+                  <h3 className="text-base font-semibold text-slate-900">
+                    Comparacion detallada
+                  </h3>
+                </div>
+                <span className="text-xs text-slate-400">
+                  {periods.length} periodos
+                </span>
               </div>
-            )}
-          </Card>
+              <div className="max-h-[460px] overflow-auto scroll-pro pr-1">
+                <table className="w-full min-w-[720px] text-sm">
+                  <thead className="sticky top-0 z-10 bg-white">
+                    <tr className="border-b border-slate-200 text-xs text-slate-500">
+                      <th className="text-left py-3 pr-4 font-medium">Periodo</th>
+                      <th className="text-right py-3 px-4 font-medium">Ventas</th>
+                      <th className="text-right py-3 px-4 font-medium">Gastos</th>
+                      <th className="text-right py-3 px-4 font-medium">Ganancia</th>
+                      <th className="text-right py-3 px-4 font-medium">Ticket</th>
+                      <th className="text-right py-3 pl-4 font-medium">Vs ant.</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {periods.map((period, index) => {
+                      const previous = periods[index - 1];
+                      const change = previous
+                        ? getChange(period.salesTotal, previous.salesTotal)
+                        : null;
+
+                      return (
+                        <tr key={period.key} className="hover:bg-slate-50 transition-all duration-150">
+                          <td className="py-3 pr-4">
+                            <p className="font-medium text-slate-800">
+                              {period.rangeLabel}
+                            </p>
+                            <p className="text-xs text-slate-400">
+                              {period.salesCount} ventas - {period.expenseCount} gastos
+                            </p>
+                          </td>
+                          <td className="py-3 px-4 text-right font-medium text-blue-700">
+                            {compactMoney(period.salesTotal)}
+                          </td>
+                          <td className="py-3 px-4 text-right font-medium text-red-700">
+                            {compactMoney(period.expenseTotal)}
+                          </td>
+                          <td
+                            className={`py-3 px-4 text-right font-semibold ${
+                              period.profit >= 0 ? "text-green-700" : "text-red-700"
+                            }`}
+                          >
+                            {compactMoney(period.profit)}
+                          </td>
+                          <td className="py-3 px-4 text-right text-slate-700">
+                            {compactMoney(period.averageTicket)}
+                          </td>
+                          <td
+                            className={`py-3 pl-4 text-right font-medium ${
+                              change === null
+                                ? "text-slate-400"
+                                : change >= 0
+                                  ? "text-green-700"
+                                  : "text-red-700"
+                            }`}
+                          >
+                            {change === null ? "-" : formatPercent(change)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </div>
+
+          <div className="animate-scale-in" style={{ animationDelay: '500ms' }}>
+            <Card className="p-6 hover:shadow-lg transition-all duration-300">
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center text-white shadow-sm">
+                  <Wallet className="w-4 h-4" />
+                </div>
+                <h3 className="text-base font-semibold text-slate-900">
+                  Gastos por categoria
+                </h3>
+              </div>
+              {categoryChartData.length > 0 ? (
+                <BarChart
+                  data={categoryChartData}
+                  height={240}
+                  formatValue={(value) => compactMoney(value)}
+                />
+              ) : (
+                <div className="flex items-center justify-center h-40 text-slate-400 text-sm">
+                  Sin gastos en el periodo
+                </div>
+              )}
+            </Card>
+          </div>
         </div>
       </div>
     </div>

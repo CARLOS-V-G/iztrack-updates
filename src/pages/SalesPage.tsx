@@ -97,6 +97,8 @@ interface SaleDraft {
   baseAmount: string;
   surcharge: number;
   customSurcharge: string;
+  discount: number;
+  customDiscount: string;
   scannedTickets: ScannedTicket[];
 }
 
@@ -165,6 +167,8 @@ export function SalesPage() {
   const [amountPaid, setAmountPaid] = useState("");
   const [surcharge, setSurcharge] = useState(0);
   const [customSurcharge, setCustomSurcharge] = useState("");
+  const [discount, setDiscount] = useState(0);
+  const [customDiscount, setCustomDiscount] = useState("");
   const [baseAmount, setBaseAmount] = useState("");
   const [saleAlert, setSaleAlert] = useState<SaleAlert | null>(null);
   const [barcodeInput, setBarcodeInput] = useState("");
@@ -201,6 +205,7 @@ export function SalesPage() {
   const paid = parseMoney(amountPaid);
   const change = paid - total;
   const isCredit = form.payment_method === "credit";
+  const isCash = form.payment_method === "cash";
   const scannerTotal = scannedTickets.reduce((sum, ticket) => sum + ticket.amount, 0);
 
   scannerBlockedRef.current = modalOpen || Boolean(deleteId);
@@ -368,6 +373,8 @@ export function SalesPage() {
     setBaseAmount("");
     setSurcharge(0);
     setCustomSurcharge("");
+    setDiscount(0);
+    setCustomDiscount("");
     setBarcodeInput("");
     setScannedTickets([]);
     setScannerMessage(null);
@@ -385,6 +392,8 @@ export function SalesPage() {
     setBaseAmount(draftBeforeEdit.baseAmount);
     setSurcharge(draftBeforeEdit.surcharge);
     setCustomSurcharge(draftBeforeEdit.customSurcharge);
+    setDiscount(draftBeforeEdit.discount);
+    setCustomDiscount(draftBeforeEdit.customDiscount);
     setScannedTickets(draftBeforeEdit.scannedTickets);
     setDraftBeforeEdit(null);
     setEditSale(null);
@@ -406,6 +415,8 @@ export function SalesPage() {
       baseAmount,
       surcharge,
       customSurcharge,
+      discount,
+      customDiscount,
       scannedTickets,
     });
     setEditSale(sale);
@@ -546,6 +557,15 @@ export function SalesPage() {
       return;
     }
 
+    if (String(amount).length > 10) {
+      setSaleAlert({
+        tone: "danger",
+        title: "Monto fuera de rango",
+        message: `El monto $${amount.toLocaleString("es-AR")} parece ser un error del escaner (codigo de barras sin parsear). Revisa el importe antes de guardar.`,
+      });
+      return;
+    }
+
     if (!paymentMethod) {
       setSaleAlert({
         tone: "warning",
@@ -630,7 +650,13 @@ export function SalesPage() {
       acc[m] = activeSales
         .filter((s) => s.payment_method === m)
         .reduce((sum, sale) => sum + Number(sale.amount), 0);
-
+      return acc;
+    },
+    {} as Record<PaymentMethod, number>,
+  );
+  const countByMethod = PAYMENT_METHODS.reduce(
+    (acc, m) => {
+      acc[m] = activeSales.filter((s) => s.payment_method === m).length;
       return acc;
     },
     {} as Record<PaymentMethod, number>,
@@ -639,51 +665,47 @@ export function SalesPage() {
   const grandTotal = activeSales.reduce((s, sale) => s + sale.amount, 0);
 
   function applySurcharge(percent: number) {
-    const base = Number(baseAmount) || 0;
+    const base = Number(baseAmount) || Number(form.amount) || 0;
+    if (!base) return;
     const newTotal = base + (base * percent) / 100;
 
+    if (!baseAmount) setBaseAmount(String(base));
     setSurcharge(percent);
     setCustomSurcharge("");
     updateForm("amount", String(Math.round(newTotal)));
   }
 
+  function applyDiscount(percent: number) {
+    const base = Number(baseAmount) || Number(form.amount) || 0;
+    if (!base) return;
+    const newTotal = base - (base * percent) / 100;
+
+    if (!baseAmount) setBaseAmount(String(base));
+    setDiscount(percent);
+    setCustomDiscount("");
+    updateForm("amount", String(Math.max(Math.round(newTotal), 0)));
+  }
+
   function renderScannerPanel() {
     return (
-      <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 space-y-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-start gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-lg bg-blue-600 text-white flex items-center justify-center flex-shrink-0">
-              <Barcode className="w-4 h-4" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-slate-900">Escaner de balanza</p>
-              <p className="text-xs text-blue-800 mt-0.5">
-                Apunta al codigo del producto que empieza con {scannerConfig.barcode_prefix}. No uses el codigo final del comprobante.
-              </p>
-            </div>
+      <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2.5 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <Barcode className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
+            <p className="text-xs font-medium text-slate-700">Escaner</p>
+            {scannerBackend && scannerMode && (
+              <span className="text-[10px] px-1 py-0.5 rounded bg-blue-100 text-blue-600 font-mono">{scannerBackend}</span>
+            )}
+            {scannerMode && <span className="text-[10px] text-green-600 font-medium">activo</span>}
           </div>
-
-          <button
-            type="button"
-            onClick={clearScannedTickets}
-            className="p-1.5 rounded-lg text-blue-700 hover:bg-white/70 transition-colors"
-            title="Limpiar tickets escaneados"
-          >
-            <RotateCcw className="w-4 h-4" />
-          </button>
+          {scannedTickets.length > 0 && (
+            <button type="button" onClick={clearScannedTickets} className="p-1 rounded text-blue-600 hover:bg-blue-100 transition-colors" title="Limpiar">
+              <RotateCcw className="w-3 h-3" />
+            </button>
+          )}
         </div>
 
-            <div className="flex items-center gap-2">
-              {scannerBackend && scannerMode && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-600 font-mono">
-                  {scannerBackend}
-                </span>
-              )}
-              {scannerMode && (
-                <span className="text-[10px] text-green-600 font-medium">Captura global activa</span>
-              )}
-            </div>
-            <input
+        <input
           ref={scannerInputRef}
           type="text"
           inputMode="numeric"
@@ -691,63 +713,40 @@ export function SalesPage() {
           onChange={(event) => setBarcodeInput(event.target.value.replace(/\D/g, ""))}
           onKeyDown={(event) => {
             if (event.key !== "Enter") return;
-
             event.preventDefault();
-            const value = event.currentTarget.value;
-
-            if (value.trim()) {
-              handleBarcodeSubmit(value);
-              return;
-            }
-
+            if (event.currentTarget.value.trim()) { handleBarcodeSubmit(event.currentTarget.value); return; }
             quickSaveRef.current();
           }}
-          placeholder="Escanea aqui o escribe el codigo y Enter"
-          className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="Codigo de barras o Enter para guardar"
+          className="w-full rounded-lg border border-blue-200 bg-white px-2.5 py-1.5 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-blue-500"
         />
 
         {scannerMessage && (
-          <div
-            className={`rounded-lg border px-3 py-2 text-xs flex items-center gap-2 ${
-              scannerMessage.tone === "success"
-                ? "border-green-200 bg-green-50 text-green-700"
-                : scannerMessage.tone === "warning"
-                  ? "border-amber-200 bg-amber-50 text-amber-800"
-                  : "border-red-200 bg-red-50 text-red-700"
-            }`}
-          >
+          <div className={`rounded px-2 py-1 text-[11px] flex items-center gap-1.5 ${
+            scannerMessage.tone === "success" ? "bg-green-50 text-green-700" : scannerMessage.tone === "warning" ? "bg-amber-50 text-amber-800" : "bg-red-50 text-red-700"
+          }`}>
             <span>{scannerMessage.tone === "success" ? "✓" : "✗"}</span>
             <span>{scannerMessage.message}</span>
           </div>
         )}
 
         {scannedTickets.length > 0 && (
-          <div className="rounded-xl border border-blue-100 bg-white overflow-hidden">
-            <div className="px-3 py-2 border-b border-blue-50 flex items-center justify-between gap-3">
-              <span className="text-xs font-semibold text-slate-600">
-                {scannedTickets.length} ticket{scannedTickets.length === 1 ? "" : "s"}
-              </span>
-              <span className="text-sm font-bold text-blue-700">{formatCurrency(scannerTotal)}</span>
+          <div className="rounded-lg border border-blue-100 bg-white max-h-24 overflow-y-auto">
+            <div className="px-2.5 py-1.5 border-b border-blue-50 flex items-center justify-between gap-2 sticky top-0 bg-white">
+              <span className="text-[11px] font-medium text-slate-500">{scannedTickets.length} ticket{scannedTickets.length === 1 ? "" : "s"}</span>
+              <span className="text-xs font-bold text-blue-700">{formatCurrency(scannerTotal)}</span>
             </div>
-
-            <div className="max-h-24 overflow-y-auto divide-y divide-slate-50">
+            <div className="divide-y divide-slate-50">
               {scannedTickets.map((ticket, index) => (
-                <div key={ticket.id} className="px-3 py-2 flex items-center justify-between gap-3">
+                <div key={ticket.id} className="px-2.5 py-1.5 flex items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="text-xs font-medium text-slate-700">
-                      Ticket {index + 1} - {ticket.label}
-                    </p>
-                    <p className="text-[11px] text-slate-400 truncate">{ticket.code}</p>
+                    <p className="text-[11px] font-medium text-slate-700 truncate">Ticket {index + 1} - {ticket.label}</p>
+                    <p className="text-[10px] text-slate-400 truncate">{ticket.code}</p>
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="text-xs font-bold text-slate-900">{formatCurrency(ticket.amount)}</span>
-                    <button
-                      type="button"
-                      onClick={() => removeScannedTicket(ticket.id)}
-                      className="p-1 rounded-md text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"
-                      title="Quitar ticket"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <span className="text-[11px] font-bold text-slate-900">{formatCurrency(ticket.amount)}</span>
+                    <button type="button" onClick={() => removeScannedTicket(ticket.id)} className="p-0.5 rounded text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors" title="Quitar">
+                      <Trash2 className="w-3 h-3" />
                     </button>
                   </div>
                 </div>
@@ -761,8 +760,8 @@ export function SalesPage() {
 
   function renderSaleForm() {
     return (
-      <form
-        className={editSale ? "space-y-5" : "space-y-4"}
+          <form
+        className="space-y-4"
         onSubmit={(event) => {
           event.preventDefault();
           handleSave();
@@ -770,25 +769,17 @@ export function SalesPage() {
       >
         {saleAlert && (
           <div
-            className={`rounded-xl border px-4 py-3 ${
+            className={`rounded-lg border px-3 py-2.5 ${
               saleAlert.tone === "danger"
                 ? "border-red-200 bg-red-50 text-red-800"
                 : "border-amber-200 bg-amber-50 text-amber-900"
             }`}
           >
-            <div className="flex items-start gap-3">
-              <div
-                className={`mt-0.5 w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                  saleAlert.tone === "danger"
-                    ? "bg-red-600 text-white"
-                    : "bg-amber-500 text-white"
-                }`}
-              >
-                <AlertTriangle className="w-4 h-4" />
-              </div>
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
               <div>
-                <p className="text-sm font-semibold">{saleAlert.title}</p>
-                <p className="text-xs mt-1 opacity-80">{saleAlert.message}</p>
+                <p className="text-xs font-semibold">{saleAlert.title}</p>
+                <p className="text-[11px] mt-0.5 opacity-80">{saleAlert.message}</p>
               </div>
             </div>
           </div>
@@ -797,188 +788,195 @@ export function SalesPage() {
         {!editSale && renderScannerPanel()}
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-3">
+          <label className="block text-xs font-medium text-slate-600 mb-1.5">
             Medio de Pago
           </label>
-          {!form.payment_method && (
-            <p className="text-xs text-slate-500 mb-2">
-              Selecciona el metodo antes de registrar la venta.
-            </p>
-          )}
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-2 2xl:grid-cols-3">
-            {PAYMENT_METHODS.map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => updateForm("payment_method", m)}
-                className={`
-                  flex min-w-0 items-center gap-2 px-3 py-2.5 rounded-xl border-2 text-sm font-medium transition-all
-                  ${
-                    form.payment_method === m
-                      ? "border-blue-600 bg-blue-50 text-blue-700"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                  }
-                `}
-              >
-                {METHOD_ICONS[m]}
-                <span className="truncate">{PAYMENT_METHOD_LABELS[m]}</span>
-              </button>
-            ))}
+          <div className="grid grid-cols-5 gap-2.5">
+            {PAYMENT_METHODS.map((m) => {
+              const active = form.payment_method === m;
+              const color = PAYMENT_METHOD_COLORS[m];
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => {
+                    updateForm("payment_method", m);
+                    setSurcharge(0);
+                    setCustomSurcharge("");
+                    setDiscount(0);
+                    setCustomDiscount("");
+                    if (baseAmount) updateForm("amount", baseAmount);
+                  }}
+                  className={`group relative rounded-2xl border-2 transition-all ${active ? "shadow-lg scale-105" : "hover:scale-[1.03] hover:shadow-md"}`}
+                  style={{
+                    borderColor: active ? color : "#e2e8f0",
+                    background: active ? `linear-gradient(145deg, ${color} 0%, ${color}dd 100%)` : "#fff",
+                    padding: "14px 0",
+                  }}
+                >
+                  <div style={{ color: active ? "#fff" : color }} className="flex justify-center">
+                    <div className={active ? "" : "drop-shadow-sm"}>
+                      {METHOD_ICONS[m]}
+                    </div>
+                  </div>
+                  <div
+                    className="pointer-events-none absolute -top-9 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[11px] font-semibold opacity-0 shadow-lg transition-all group-hover:opacity-100 group-hover:-translate-y-0.5"
+                    style={{ backgroundColor: color, color: "#fff" }}
+                  >
+                    {PAYMENT_METHOD_LABELS[m]}
+                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 h-2 w-2 rotate-45" style={{ backgroundColor: color }} />
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
 
         {isCredit && (
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              Recargo por credito
+            <label className="block text-xs font-medium text-slate-600 mb-1">
+              Recargo
             </label>
-            <div className="flex gap-2 flex-wrap">
-              <button
-                type="button"
-                onClick={() => {
-                  setSurcharge(0);
-                  setCustomSurcharge("");
-                  updateForm("amount", baseAmount);
-                }}
-                className={`px-3 py-1 rounded-lg border text-sm ${
-                  surcharge === 0
-                    ? "bg-blue-600 text-white border-blue-600"
-                    : "bg-white border-slate-300"
-                }`}
-              >
-                0%
-              </button>
-
-              {[5, 10].map((p) => (
+            <div className="flex gap-1.5">
+              {[0, 5, 10].map((p) => (
                 <button
                   key={p}
                   type="button"
-                  onClick={() => applySurcharge(p)}
-                  className={`px-3 py-1 rounded-lg border text-sm ${
-                    surcharge === p
-                      ? "bg-blue-600 text-white border-blue-600"
-                      : "bg-white border-slate-300"
+                  onClick={() => {
+                    if (p === 0) { setSurcharge(0); setCustomSurcharge(""); const fb = baseAmount || form.amount; updateForm("amount", fb); if (!baseAmount) setBaseAmount(fb); }
+                    else { setDiscount(0); setCustomDiscount(""); applySurcharge(p); }
+                  }}
+                  className={`px-2.5 py-1 rounded-md border text-xs font-medium ${
+                    surcharge === p ? "bg-blue-600 text-white border-blue-600" : "bg-white border-slate-300"
                   }`}
                 >
-                  {p}%
+                  +{p}%
                 </button>
               ))}
-
               <input
                 type="number"
                 placeholder="%"
-                className="w-20 px-2 py-1 border rounded-lg text-sm"
+                className="w-16 px-2 py-1 border rounded-md text-xs"
                 value={customSurcharge}
                 onChange={(e) => {
                   const val = e.target.value;
                   const percent = Number(val) || 0;
-                  const base = Number(baseAmount) || 0;
-                  const newTotal = base + (base * percent) / 100;
-
+                  const base = Number(baseAmount) || Number(form.amount) || 0;
+                  if (!base) return;
+                  if (!baseAmount) setBaseAmount(String(base));
                   setCustomSurcharge(val);
                   setSurcharge(percent);
-                  updateForm("amount", String(Math.round(newTotal)));
+                  setDiscount(0);
+                  setCustomDiscount("");
+                  updateForm("amount", String(Math.round(base + (base * percent) / 100)));
                 }}
               />
             </div>
           </div>
         )}
 
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5">
-            Monto
-          </label>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium text-sm">
-              $
-            </span>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={formatMoney(form.amount)}
-              onChange={(e) => {
-                const raw = e.target.value.replace(/\D/g, "");
-
-                updateForm("amount", raw);
-                setBaseAmount(raw);
-              }}
-              placeholder="0"
-              className="w-full pl-7 pr-4 py-2.5 border border-slate-300 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg font-medium"
-            />
+        {isCash && (
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">
+              Descuento
+            </label>
+            <div className="flex gap-1.5">
+              {[0, 5, 10].map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => {
+                    if (p === 0) { setDiscount(0); setCustomDiscount(""); updateForm("amount", baseAmount); }
+                    else { setSurcharge(0); setCustomSurcharge(""); applyDiscount(p); }
+                  }}
+                  className={`px-2.5 py-1 rounded-md border text-xs font-medium ${
+                    discount === p ? "bg-green-600 text-white border-green-600" : "bg-white border-slate-300"
+                  }`}
+                >
+                  -{p}%
+                </button>
+              ))}
+              <input
+                type="number"
+                placeholder="%"
+                className="w-16 px-2 py-1 border rounded-md text-xs"
+                value={customDiscount}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const percent = Number(val) || 0;
+                  const base = Number(baseAmount) || Number(form.amount) || 0;
+                  if (!base) return;
+                  if (!baseAmount) setBaseAmount(String(base));
+                  setCustomDiscount(val);
+                  setDiscount(percent);
+                  setSurcharge(0);
+                  setCustomSurcharge("");
+                  updateForm("amount", String(Math.max(Math.round(base - (base * percent) / 100), 0)));
+                }}
+              />
+            </div>
           </div>
-        </div>
+        )}
 
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5">
-            Pago del cliente
-          </label>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium text-sm">
-              $
-            </span>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={formatMoney(amountPaid)}
-              onChange={(e) => {
-                const raw = e.target.value.replace(/\D/g, "");
-                setAmountPaid(raw);
-              }}
-              placeholder="0"
-              className="w-full pl-7 pr-4 py-2.5 border border-slate-300 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg font-medium"
-            />
+        <div className="flex gap-2">
+          <div className="flex-1">
+            <label className="block text-xs font-medium text-slate-600 mb-1">Monto</label>
+            <div className="relative">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">$</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={formatMoney(form.amount)}
+                onChange={(e) => {
+                  const raw = e.target.value.replace(/\D/g, "");
+                  updateForm("amount", raw);
+                  setBaseAmount(raw);
+                }}
+                placeholder="0"
+                className="w-full pl-6 pr-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+              />
+            </div>
+          </div>
+          <div className="flex-1">
+            <label className="block text-xs font-medium text-slate-600 mb-1">Paga con</label>
+            <div className="relative">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">$</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={formatMoney(amountPaid)}
+                onChange={(e) => setAmountPaid(e.target.value.replace(/\D/g, ""))}
+                placeholder="0"
+                className="w-full pl-6 pr-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+              />
+            </div>
           </div>
         </div>
 
         {amountPaid && (
-          <div className="rounded-xl border border-slate-300 px-4 py-3 bg-white shadow-sm flex justify-between items-center">
-            {paid < total ? (
-              <>
-                <span className="text-sm text-slate-500">Faltante</span>
-                <span className="text-red-500 font-semibold text-lg">
-                  -${(total - paid).toLocaleString("es-AR")}
-                </span>
-              </>
-            ) : (
-              <>
-                <span className="text-sm text-slate-500">Vuelto</span>
-                <span className="text-green-600 font-semibold text-lg">
-                  ${change.toLocaleString("es-AR")}
-                </span>
-              </>
-            )}
+          <div className={`rounded-lg border px-3 py-2 flex justify-between items-center text-sm ${
+            paid < total ? "border-red-200 bg-red-50 text-red-700" : "border-green-200 bg-green-50 text-green-700"
+          }`}>
+            <span className="text-xs font-medium">{paid < total ? "Faltante" : "Vuelto"}</span>
+            <span className="font-bold">
+              {paid < total ? "-" : "+"}${(paid < total ? total - paid : change).toLocaleString("es-AR")}
+            </span>
           </div>
         )}
 
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1.5">
-            Notas (opcional)
-          </label>
-          <input
-            type="text"
-            value={form.notes}
-            onChange={(e) => updateForm("notes", e.target.value)}
-            placeholder="Ej: Mesa 5, pedido especial..."
-            className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
+        <input
+          type="text"
+          value={form.notes}
+          onChange={(e) => updateForm("notes", e.target.value)}
+          placeholder="Notas (opcional)"
+          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
 
-        <div
-          className={
-            editSale
-              ? "flex gap-3 pt-2"
-              : "sticky bottom-0 z-20 -mx-6 -mb-6 mt-2 flex gap-3 border-t border-slate-100 bg-white/95 px-6 py-4 backdrop-blur"
-          }
-        >
-          <Button
-            type="button"
-            variant="secondary"
-            className="flex-1"
-            onClick={editSale ? closeEditModal : resetCreateForm}
-          >
+        <div className={editSale ? "flex gap-2 pt-1" : "sticky bottom-0 z-20 -mx-7 -mb-7 flex gap-2 border-t border-slate-100 bg-white/95 px-7 py-4 backdrop-blur"}>
+          <Button type="button" variant="secondary" className="flex-1 text-sm py-2" onClick={editSale ? closeEditModal : resetCreateForm}>
             {editSale ? "Cancelar" : "Limpiar"}
           </Button>
-          <Button type="submit" className="flex-1" loading={saving}>
+          <Button type="submit" className="flex-1 text-sm py-2" loading={saving}>
             {editSale ? "Guardar Cambios" : "Registrar Venta"}
           </Button>
         </div>
@@ -993,41 +991,50 @@ export function SalesPage() {
         subtitle={formatDate(filterDate)}
         actions={
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 bg-slate-100 rounded-lg p-0.5">
               <button
                 onClick={() => setScannerMode(!scannerMode)}
-                className={`relative px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                className={`relative px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
                   scannerMode
-                    ? "bg-green-600 text-white ring-2 ring-green-400"
-                    : "bg-slate-200 text-slate-600 hover:bg-slate-300"
+                    ? "bg-white text-green-700 shadow-sm ring-1 ring-green-200"
+                    : "text-slate-500 hover:text-slate-700"
                 }`}
                 title={scannerMode ? "Desactivar modo escaneo global" : "Activar modo escaneo global"}
               >
                 {scannerMode && (
-                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-400 rounded-full animate-ping" />
+                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full animate-ping" />
                 )}
-                <Barcode className="w-4 h-4 inline mr-1" />
+                <Barcode className="w-4 h-4 inline mr-1.5" />
                 {scannerMode ? "Escaneo activo" : "Escanear"}
               </button>
               <button
                 onClick={() => setShowScannerHistory(!showScannerHistory)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors relative"
+                className={`p-1.5 rounded-md transition-all relative ${
+                  showScannerHistory
+                    ? "bg-white text-blue-600 shadow-sm ring-1 ring-blue-200"
+                    : "text-slate-400 hover:text-slate-600"
+                }`}
                 title="Historial de escaneos"
               >
                 <History className="w-4 h-4" />
                 {scannerHistory.length > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-blue-500 rounded-full text-[8px] text-white flex items-center justify-center font-bold">
+                  <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-blue-500 rounded-full text-[8px] text-white flex items-center justify-center font-bold ring-2 ring-white">
                     {Math.min(scannerHistory.length, 9)}
                   </span>
                 )}
               </button>
             </div>
-            <input
-              type="date"
-              value={filterDate}
-              onChange={(e) => setFilterDate(e.target.value)}
-              className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+            <div className="relative">
+              <svg className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <input
+                type="date"
+                value={filterDate}
+                onChange={(e) => setFilterDate(e.target.value)}
+                className="pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 bg-white text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+              />
+            </div>
           </div>
         }
       />
@@ -1059,43 +1066,69 @@ export function SalesPage() {
         )}
 
         <div className="p-8 space-y-6">
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-          {PAYMENT_METHODS.map((m) => (
-            <Card key={m} className="p-4">
-              <p className="text-xs text-slate-500 mb-1">
-                {PAYMENT_METHOD_LABELS[m]}
-              </p>
-              <p
-                className="text-lg font-bold"
-                style={{ color: PAYMENT_METHOD_COLORS[m] }}
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+          {PAYMENT_METHODS.map((m) => {
+            const color = PAYMENT_METHOD_COLORS[m];
+            const count = countByMethod[m];
+            return (
+              <div
+                key={m}
+                className="rounded-2xl p-5 shadow-sm hover:shadow-lg transition-all duration-300 relative overflow-hidden"
+                style={{
+                  background: `linear-gradient(145deg, ${color}0a 0%, ${color}04 100%)`,
+                }}
               >
-                {formatCurrency(totalByMethod[m])}
-              </p>
-            </Card>
-          ))}
-          <Card className="p-4 bg-blue-50 border-blue-200">
-            <p className="text-xs text-blue-600 mb-1 font-medium">TOTAL</p>
-            <p className="text-lg font-bold text-blue-700">
-              {formatCurrency(grandTotal)}
-            </p>
-          </Card>
+                <div
+                  className="absolute top-0 right-0 w-24 h-24 rounded-full opacity-[0.06] translate-x-8 -translate-y-8"
+                  style={{ backgroundColor: color }}
+                />
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-sm" style={{ backgroundColor: color }}>
+                    {METHOD_ICONS[m]}
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium" style={{ color }}>{PAYMENT_METHOD_LABELS[m]}</p>
+                    {count > 0 && <p className="text-[10px] text-slate-400">{count} venta{count !== 1 ? "s" : ""}</p>}
+                  </div>
+                </div>
+                <p className="text-xl font-bold text-slate-900">{formatCurrency(totalByMethod[m])}</p>
+              </div>
+            );
+          })}
+          <div className="rounded-2xl bg-gradient-to-br from-blue-600 to-blue-700 p-5 shadow-sm text-white hover:shadow-lg transition-all duration-300">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              </div>
+              <p className="text-xs font-medium text-blue-100">TOTAL</p>
+            </div>
+            <p className="text-xl font-bold">{formatCurrency(grandTotal)}</p>
+          </div>
         </div>
 
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
-          <Card className="flex flex-col h-[68vh] min-h-[560px]">
-            <div className="p-6 border-b border-slate-100 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <h3 className="font-semibold text-slate-900">
-                Ventas del dia
-                {loading && (
-                  <RefreshCw className="inline w-4 h-4 ml-2 animate-spin text-slate-400" />
-                )}
-              </h3>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm text-slate-500">
-                  {visibleActiveSales.length} activas ·{" "}
-                  {visibleVoidedSales.length} anuladas ·{" "}
-                  {formatCurrency(visibleTotal)}
-                </span>
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-slate-100" />
+          </div>
+        </div>
+
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+          <Card className="flex flex-col h-[70vh] min-h-[575px]">
+            <div className="p-7 border-b border-slate-100 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between bg-gradient-to-r from-slate-50/80 to-white">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white shadow-sm">
+                  <CreditCard className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-slate-900">
+                    Ventas del dia
+                    {loading && (
+                      <RefreshCw className="inline w-4 h-4 ml-2 animate-spin text-slate-400" />
+                    )}
+                  </h3>
+                  <p className="text-[11px] text-slate-400">{visibleActiveSales.length} activas · {visibleVoidedSales.length} anuladas</p>
+                </div>
+              </div>
                 <label className="relative">
                   <Filter className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
                   <select
@@ -1112,62 +1145,87 @@ export function SalesPage() {
                     ))}
                   </select>
                 </label>
-              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto">
-              {sales.length === 0 && !loading ? (
-                <div className="flex flex-col items-center justify-center py-16 text-slate-400">
-                  <Plus className="w-12 h-12 mb-3 opacity-20" />
-                  <p className="text-sm">Sin ventas para esta fecha</p>
-                  <p className="text-xs mt-1">
-                    Registra la primera venta desde el panel lateral
+              {loading ? (
+                <div className="p-6 space-y-4 animate-fade-in">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <div key={i} className="flex items-center justify-between gap-4 px-2">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-slate-100 animate-pulse" />
+                        <div className="space-y-2">
+                          <div className="h-3 w-24 rounded bg-slate-100 animate-pulse" />
+                          <div className="h-2.5 w-16 rounded bg-slate-100 animate-pulse" />
+                        </div>
+                      </div>
+                      <div className="h-4 w-20 rounded bg-slate-100 animate-pulse" />
+                    </div>
+                  ))}
+                </div>
+              ) : sales.length === 0 && !loading ? (
+                <div className="flex flex-col items-center justify-center py-16 text-slate-400 animate-fade-in">
+                  <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4 animate-pulse">
+                    <Plus className="w-8 h-8 text-slate-300" />
+                  </div>
+                  <p className="text-sm font-medium text-slate-500">Sin ventas para esta fecha</p>
+                  <p className="text-xs mt-1.5 text-slate-400">
+                    Escanea un código de barras o registra desde el panel lateral
                   </p>
                 </div>
               ) : visibleSales.length === 0 && !loading ? (
-                <div className="flex flex-col items-center justify-center py-16 text-slate-400">
-                  <Filter className="w-12 h-12 mb-3 opacity-20" />
-                  <p className="text-sm">Sin ventas para este filtro</p>
-                  <p className="text-xs mt-1">
-                    Cambia el medio de pago para ver otras ventas.
+                <div className="flex flex-col items-center justify-center py-16 text-slate-400 animate-fade-in">
+                  <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4 animate-pulse">
+                    <Filter className="w-8 h-8 text-slate-300" />
+                  </div>
+                  <p className="text-sm font-medium text-slate-500">Sin ventas para este filtro</p>
+                  <p className="text-xs mt-1.5 text-slate-400">
+                    Cambia el medio de pago para ver otras ventas
                   </p>
                 </div>
               ) : (
-                <div className="divide-y divide-slate-50">
+                <div className="divide-y divide-slate-100 animate-fade-in">
                   {visibleSales.map((sale) => (
                     <div
                       key={sale.id}
-                      className={`flex items-center justify-between gap-4 px-6 py-4 hover:bg-slate-50 transition-colors ${
+                      className={`flex items-center justify-between gap-4 px-6 py-4 hover:bg-slate-50/80 transition-all duration-200 group ${
                         sale.voided ? "opacity-50" : ""
                       }`}
                     >
-                      <div className="flex items-center gap-4 min-w-0">
+                      <div className="flex items-center gap-3 min-w-0">
                         <div
-                          className="w-2 h-8 rounded-full flex-shrink-0"
+                          className="w-10 h-10 rounded-xl flex items-center justify-center text-white flex-shrink-0 shadow-sm transition-transform duration-200 group-hover:scale-110"
                           style={{
                             backgroundColor: sale.voided
                               ? "#cbd5e1"
                               : PAYMENT_METHOD_COLORS[sale.payment_method],
                           }}
-                        />
+                        >
+                          {METHOD_ICONS[sale.payment_method] || <CreditCard className="w-4 h-4" />}
+                        </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-slate-800 truncate">
+                            <span className="text-sm font-semibold text-slate-800 truncate">
                               {PAYMENT_METHOD_LABELS[sale.payment_method]}
                             </span>
                             {sale.voided && <Badge label="Anulada" color="red" />}
                           </div>
-                          {sale.notes && (
-                            <p className="text-xs text-slate-400 mt-0.5 truncate">
-                              {sale.notes}
-                            </p>
-                          )}
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {sale.created_at && (
+                              <span className="text-[11px] text-slate-400">
+                                {new Date(sale.created_at).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}
+                              </span>
+                            )}
+                            {sale.notes && (
+                              <span className="text-[11px] text-slate-400 truncate">· {sale.notes}</span>
+                            )}
+                          </div>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3 flex-shrink-0">
+                      <div className="flex items-center gap-2 flex-shrink-0">
                         <span
-                          className={`text-base font-bold ${
+                          className={`text-base font-bold tabular-nums ${
                             sale.voided
                               ? "text-slate-400 line-through"
                               : "text-slate-900"
@@ -1176,7 +1234,7 @@ export function SalesPage() {
                           {formatCurrency(sale.amount)}
                         </span>
 
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             onClick={() => openEdit(sale)}
                             className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
@@ -1217,23 +1275,23 @@ export function SalesPage() {
             </div>
           </Card>
 
-          <Card className="h-fit xl:sticky xl:top-6">
-            <div className="p-6 border-b border-slate-100">
+          <Card className="flex flex-col h-[70vh] min-h-[575px] xl:sticky xl:top-6">
+            <div className="p-7 border-b border-slate-100 bg-gradient-to-r from-slate-50/80 to-white">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
-                  <Plus className="w-5 h-5 text-blue-700" />
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white shadow-sm">
+                  <Plus className="w-4 h-4" />
                 </div>
                 <div>
                   <h3 className="font-semibold text-slate-900">
                     Registrar Nueva Venta
                   </h3>
-                  <p className="text-xs text-slate-500">
-                    Carga rapida para {formatDate(filterDate)}
+                  <p className="text-[11px] text-slate-400">
+                    {formatDate(filterDate)}
                   </p>
                 </div>
               </div>
             </div>
-            <div className="p-6">{renderSaleForm()}</div>
+            <div className="flex-1 overflow-y-auto p-7">{renderSaleForm()}</div>
           </Card>
         </div>
       </div>

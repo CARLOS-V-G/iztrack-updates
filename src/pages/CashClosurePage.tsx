@@ -312,15 +312,29 @@ export function CashClosurePage() {
 
   if (loading) {
     return (
-      <div className="flex h-full min-h-screen items-center justify-center text-slate-500">
-        <RefreshCw className="mr-2 h-5 w-5 animate-spin" />
-        Cargando cierre de caja...
+      <div className="p-8 space-y-6 animate-fade-in">
+        <div className="h-16 w-80 rounded-xl bg-slate-100 animate-pulse mb-8" />
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-28 rounded-2xl bg-slate-100 animate-pulse" />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_390px]">
+          <div className="space-y-6">
+            <div className="h-80 rounded-2xl bg-slate-100 animate-pulse" />
+            <div className="h-64 rounded-2xl bg-slate-100 animate-pulse" />
+          </div>
+          <div className="space-y-6">
+            <div className="h-64 rounded-2xl bg-slate-100 animate-pulse" />
+            <div className="h-72 rounded-2xl bg-slate-100 animate-pulse" />
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div>
+    <div className="animate-fade-in">
       <PageHeader
         title="Cierre de Caja"
         subtitle={`Control diario para ${formatDate(selectedDate)}`}
@@ -330,7 +344,7 @@ export function CashClosurePage() {
               type="date"
               value={selectedDate}
               onChange={(event) => setSelectedDate(event.target.value)}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-blue-500"
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400 focus:shadow-sm transition-all duration-200"
             />
             <Button variant="secondary" onClick={fetchData}>
               <RefreshCw className="h-4 w-4" />
@@ -357,50 +371,88 @@ export function CashClosurePage() {
 
       <div className="space-y-6 p-8">
         {message && (
-          <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-800">
+          <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50 to-blue-100/50 px-4 py-3 text-sm font-medium text-blue-800 shadow-sm animate-slide-up">
             {message}
           </div>
         )}
 
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-4">
-          <Card className="p-5">
-            <p className="text-xs font-medium text-slate-500">Ventas activas</p>
-            <p className="mt-1 text-2xl font-bold text-blue-700">{formatCurrency(totals.sales)}</p>
-            <p className="mt-1 text-xs text-slate-400">{activeSales.length} operaciones</p>
-          </Card>
-          <Card className="p-5">
-            <p className="text-xs font-medium text-slate-500">Gastos pagados</p>
-            <p className="mt-1 text-2xl font-bold text-red-600">
-              {formatCurrency(totals.paidExpenses)}
-            </p>
-            <p className="mt-1 text-xs text-slate-400">{paidExpenses.length} gastos</p>
-          </Card>
-          <Card className="p-5">
-            <p className="text-xs font-medium text-slate-500">Ganancia neta</p>
-            <p className={`mt-1 text-2xl font-bold ${totals.netProfit >= 0 ? "text-green-700" : "text-red-600"}`}>
-              {formatCurrency(totals.netProfit)}
-            </p>
-            <p className="mt-1 text-xs text-slate-400">{formatCurrency(totals.pendingExpenses)} pendiente</p>
-          </Card>
-          <Card className="p-5">
-            <p className="text-xs font-medium text-slate-500">Diferencia de caja</p>
-            <p className={`mt-1 text-2xl font-bold ${totals.difference === 0 ? "text-green-700" : totals.difference > 0 ? "text-blue-700" : "text-red-600"}`}>
-              {formatCurrency(totals.difference)}
-            </p>
-            <p className="mt-1 text-xs text-slate-400">
-              {selectedClosure ? "Cierre guardado" : "Sin cierre guardado"}
-            </p>
-          </Card>
+          <div className="animate-slide-up" style={{ animationDelay: '0ms' }}>
+            <Card className="p-5 h-full hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 group relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-1 h-full bg-blue-500 opacity-60 group-hover:opacity-100 transition-opacity duration-300" />
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white shadow-sm transition-all duration-300 group-hover:scale-110 group-hover:shadow-md">
+                  <Activity className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-slate-500">Ventas activas</p>
+                  <p className="text-xl font-bold text-blue-700 truncate mt-0.5 transition-all duration-300 group-hover:scale-[1.02] origin-left">{formatCurrency(totals.sales)}</p>
+                  <p className="text-xs text-slate-400 truncate mt-1">{activeSales.length} operaciones</p>
+                </div>
+              </div>
+            </Card>
+          </div>
+          <div className="animate-slide-up" style={{ animationDelay: '50ms' }}>
+            <Card className="p-5 h-full hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 group relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-1 h-full bg-red-500 opacity-60 group-hover:opacity-100 transition-opacity duration-300" />
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-red-500 to-rose-600 flex items-center justify-center text-white shadow-sm transition-all duration-300 group-hover:scale-110 group-hover:shadow-md">
+                  <Package className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-slate-500">Gastos pagados</p>
+                  <p className="text-xl font-bold text-red-600 truncate mt-0.5 transition-all duration-300 group-hover:scale-[1.02] origin-left">{formatCurrency(totals.paidExpenses)}</p>
+                  <p className="text-xs text-slate-400 truncate mt-1">{paidExpenses.length} gastos</p>
+                </div>
+              </div>
+            </Card>
+          </div>
+          <div className="animate-slide-up" style={{ animationDelay: '100ms' }}>
+            <Card className="p-5 h-full hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 group relative overflow-hidden">
+              <div className={`absolute top-0 left-0 w-1 h-full opacity-60 group-hover:opacity-100 transition-opacity duration-300 ${totals.netProfit >= 0 ? 'bg-green-500' : 'bg-red-500'}`} />
+              <div className="flex items-center gap-3">
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-sm transition-all duration-300 group-hover:scale-110 group-hover:shadow-md ${totals.netProfit >= 0 ? 'bg-gradient-to-br from-green-500 to-emerald-600' : 'bg-gradient-to-br from-red-500 to-rose-600'}`}>
+                  <Calculator className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-slate-500">Ganancia neta</p>
+                  <p className={`text-xl font-bold truncate mt-0.5 transition-all duration-300 group-hover:scale-[1.02] origin-left ${totals.netProfit >= 0 ? "text-green-700" : "text-red-600"}`}>
+                    {formatCurrency(totals.netProfit)}
+                  </p>
+                  <p className="text-xs text-slate-400 truncate mt-1">{formatCurrency(totals.pendingExpenses)} pendiente</p>
+                </div>
+              </div>
+            </Card>
+          </div>
+          <div className="animate-slide-up" style={{ animationDelay: '150ms' }}>
+            <Card className="p-5 h-full hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 group relative overflow-hidden">
+              <div className={`absolute top-0 left-0 w-1 h-full opacity-60 group-hover:opacity-100 transition-opacity duration-300 ${totals.difference === 0 ? 'bg-green-500' : totals.difference > 0 ? 'bg-blue-500' : 'bg-red-500'}`} />
+              <div className="flex items-center gap-3">
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-sm transition-all duration-300 group-hover:scale-110 group-hover:shadow-md ${totals.difference === 0 ? 'bg-gradient-to-br from-green-500 to-emerald-600' : totals.difference > 0 ? 'bg-gradient-to-br from-blue-500 to-indigo-600' : 'bg-gradient-to-br from-red-500 to-rose-600'}`}>
+                  <RefreshCw className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-slate-500">Diferencia de caja</p>
+                  <p className={`text-xl font-bold truncate mt-0.5 transition-all duration-300 group-hover:scale-[1.02] origin-left ${totals.difference === 0 ? "text-green-700" : totals.difference > 0 ? "text-blue-700" : "text-red-600"}`}>
+                    {formatCurrency(totals.difference)}
+                  </p>
+                  <p className="text-xs text-slate-400 truncate mt-1">
+                    {selectedClosure ? "Cierre guardado" : "Sin cierre guardado"}
+                  </p>
+                </div>
+              </div>
+            </Card>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_390px]">
           <div className="space-y-6">
-            <Card className="overflow-hidden">
-              <div className="border-b border-slate-100 p-5">
+            <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 animate-slide-up" style={{ animationDelay: '200ms' }}>
+              <div className="border-b border-slate-100 p-5 bg-gradient-to-r from-slate-50/80 to-white">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-700">
-                      <Calculator className="h-5 w-5" />
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white shadow-sm">
+                      <Calculator className="w-4 h-4" />
                     </div>
                     <div>
                       <h2 className="font-semibold text-slate-900">Conteo por medio de pago</h2>
@@ -411,12 +463,12 @@ export function CashClosurePage() {
                 </div>
               </div>
 
-              <div className="divide-y divide-slate-100">
-                {PAYMENT_METHODS.map((method) => {
+              <div className="divide-y divide-slate-100 animate-fade-in">
+                {PAYMENT_METHODS.map((method, index) => {
                   const diff = Number(counted[method] || 0) - Number(expected[method] || 0);
 
                   return (
-                    <div key={method} className="grid grid-cols-1 gap-3 px-5 py-4 md:grid-cols-[1fr_140px_160px_130px] md:items-center">
+                    <div key={method} className="grid grid-cols-1 gap-3 px-5 py-4 md:grid-cols-[1fr_140px_160px_130px] md:items-center hover:bg-slate-50/60 transition-all duration-200 group" style={{ animationDelay: `${250 + index * 50}ms` }}>
                       <div>
                         <p className="text-sm font-semibold text-slate-900">
                           {PAYMENT_METHOD_LABELS[method]}
@@ -436,7 +488,7 @@ export function CashClosurePage() {
                             [method]: Number(event.target.value || 0),
                           }))
                         }
-                        className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                        className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400 focus:shadow-sm transition-all duration-200"
                         placeholder="Contado"
                       />
                       <p className={`text-sm font-bold ${diff === 0 ? "text-green-700" : diff > 0 ? "text-blue-700" : "text-red-600"}`}>
@@ -454,7 +506,7 @@ export function CashClosurePage() {
                     <input
                       value={operatorName}
                       onChange={(event) => setOperatorName(event.target.value)}
-                      className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                      className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400 focus:shadow-sm transition-all duration-200"
                       placeholder="Nombre del usuario"
                     />
                   </div>
@@ -463,24 +515,24 @@ export function CashClosurePage() {
                     <input
                       value={notes}
                       onChange={(event) => setNotes(event.target.value)}
-                      className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                      className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400 focus:shadow-sm transition-all duration-200"
                       placeholder="Observaciones del cierre"
                     />
                   </div>
                 </div>
 
-                <Button className="mt-4 w-full" loading={saving} onClick={saveClosure}>
+                <Button className="mt-4 w-full shadow-sm hover:shadow-md transition-all duration-300" loading={saving} onClick={saveClosure}>
                   <Save className="h-4 w-4" />
                   Guardar cierre del dia
                 </Button>
               </div>
             </Card>
 
-            <Card className="overflow-hidden">
-              <div className="border-b border-slate-100 p-5">
+            <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 animate-slide-up" style={{ animationDelay: '250ms' }}>
+              <div className="border-b border-slate-100 p-5 bg-gradient-to-r from-slate-50/80 to-white">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-100 text-green-700">
-                    <Package className="h-5 w-5" />
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white shadow-sm">
+                    <Package className="w-4 h-4" />
                   </div>
                   <div>
                     <h2 className="font-semibold text-slate-900">Catalogo PLU</h2>
@@ -493,39 +545,39 @@ export function CashClosurePage() {
                 <input
                   value={productForm.plu}
                   onChange={(event) => setProductForm((current) => ({ ...current, plu: event.target.value }))}
-                  className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400 focus:shadow-sm transition-all duration-200"
                   placeholder="PLU"
                 />
                 <input
                   value={productForm.name}
                   onChange={(event) => setProductForm((current) => ({ ...current, name: event.target.value }))}
-                  className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400 focus:shadow-sm transition-all duration-200"
                   placeholder="Nombre del producto"
                 />
                 <input
                   value={productForm.price_per_kg}
                   onChange={(event) => setProductForm((current) => ({ ...current, price_per_kg: event.target.value }))}
-                  className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400 focus:shadow-sm transition-all duration-200"
                   placeholder="Precio kg"
                 />
                 <input
                   value={productForm.notes}
                   onChange={(event) => setProductForm((current) => ({ ...current, notes: event.target.value }))}
-                  className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 md:col-span-2"
+                  className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400 focus:shadow-sm transition-all duration-200 md:col-span-2"
                   placeholder="Notas"
                 />
-                <Button onClick={saveProduct}>
+                <Button onClick={saveProduct} className="shadow-sm hover:shadow-md transition-all duration-300">
                   <Save className="h-4 w-4" />
                   Guardar PLU
                 </Button>
               </div>
 
-              <div className="divide-y divide-slate-100">
+              <div className="divide-y divide-slate-100 animate-fade-in">
                 {products.length === 0 ? (
                   <p className="px-5 py-5 text-sm text-slate-500">Todavia no hay productos PLU cargados.</p>
                 ) : (
                   products.slice(0, 10).map((product) => (
-                    <div key={product.id} className="flex items-center justify-between gap-3 px-5 py-3">
+                    <div key={product.id} className="flex items-center justify-between gap-3 px-5 py-3 hover:bg-slate-50/60 transition-all duration-200 group">
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-slate-900">
                           {product.name}
@@ -546,10 +598,10 @@ export function CashClosurePage() {
           </div>
 
           <div className="space-y-6">
-            <Card className="p-5">
+            <Card className="p-5 hover:shadow-lg transition-all duration-300 animate-slide-up" style={{ animationDelay: '300ms' }}>
               <div className="mb-4 flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
-                  <Settings className="h-5 w-5" />
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-slate-600 to-slate-700 flex items-center justify-center text-white shadow-sm">
+                  <Settings className="w-4 h-4" />
                 </div>
                 <div>
                   <h2 className="font-semibold text-slate-900">Escaner de balanza</h2>
@@ -563,7 +615,7 @@ export function CashClosurePage() {
                   <input
                     value={scannerConfig.barcode_prefix}
                     onChange={(event) => setScannerConfig((current) => ({ ...current, barcode_prefix: event.target.value }))}
-                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400 focus:shadow-sm transition-all duration-200"
                   />
                 </label>
                 <label className="text-xs font-medium text-slate-500">
@@ -573,7 +625,7 @@ export function CashClosurePage() {
                     min="1"
                     value={scannerConfig.amount_divisor}
                     onChange={(event) => setScannerConfig((current) => ({ ...current, amount_divisor: Number(event.target.value || 1) }))}
-                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400 focus:shadow-sm transition-all duration-200"
                   />
                 </label>
                 <label className="text-xs font-medium text-slate-500">
@@ -583,7 +635,7 @@ export function CashClosurePage() {
                     min="0"
                     value={scannerConfig.plu_start}
                     onChange={(event) => setScannerConfig((current) => ({ ...current, plu_start: Number(event.target.value || 0) }))}
-                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400 focus:shadow-sm transition-all duration-200"
                   />
                 </label>
                 <label className="text-xs font-medium text-slate-500">
@@ -593,7 +645,7 @@ export function CashClosurePage() {
                     min="1"
                     value={scannerConfig.plu_length}
                     onChange={(event) => setScannerConfig((current) => ({ ...current, plu_length: Number(event.target.value || 1) }))}
-                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400 focus:shadow-sm transition-all duration-200"
                   />
                 </label>
                 <label className="text-xs font-medium text-slate-500">
@@ -603,7 +655,7 @@ export function CashClosurePage() {
                     min="0"
                     value={scannerConfig.amount_start}
                     onChange={(event) => setScannerConfig((current) => ({ ...current, amount_start: Number(event.target.value || 0) }))}
-                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400 focus:shadow-sm transition-all duration-200"
                   />
                 </label>
                 <label className="text-xs font-medium text-slate-500">
@@ -613,22 +665,22 @@ export function CashClosurePage() {
                     min="1"
                     value={scannerConfig.amount_length}
                     onChange={(event) => setScannerConfig((current) => ({ ...current, amount_length: Number(event.target.value || 1) }))}
-                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-400 focus:shadow-sm transition-all duration-200"
                   />
                 </label>
               </div>
 
-              <Button className="mt-4 w-full" variant="secondary" onClick={saveScannerConfig}>
+              <Button className="mt-4 w-full shadow-sm hover:shadow-md transition-all duration-300" variant="secondary" onClick={saveScannerConfig}>
                 <Save className="h-4 w-4" />
                 Guardar configuracion
               </Button>
             </Card>
 
-            <Card className="overflow-hidden">
-              <div className="border-b border-slate-100 p-5">
+            <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 animate-slide-up" style={{ animationDelay: '350ms' }}>
+              <div className="border-b border-slate-100 p-5 bg-gradient-to-r from-slate-50/80 to-white">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
-                    <Activity className="h-5 w-5" />
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white shadow-sm">
+                    <Activity className="w-4 h-4" />
                   </div>
                   <div>
                     <h2 className="font-semibold text-slate-900">Actividad reciente</h2>
@@ -637,12 +689,12 @@ export function CashClosurePage() {
                 </div>
               </div>
 
-              <div className="max-h-[430px] divide-y divide-slate-100 overflow-y-auto">
+              <div className="max-h-[430px] divide-y divide-slate-100 overflow-y-auto animate-fade-in">
                 {auditLogs.length === 0 ? (
                   <p className="p-5 text-sm text-slate-500">Todavia no hay actividad registrada.</p>
                 ) : (
                   auditLogs.map((log) => (
-                    <div key={log.id} className="p-4">
+                    <div key={log.id} className="p-4 hover:bg-slate-50/60 transition-all duration-200">
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-sm font-semibold text-slate-900">
                           {log.description || `${log.action} ${log.entity}`}

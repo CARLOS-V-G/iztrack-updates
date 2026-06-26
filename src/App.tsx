@@ -11,10 +11,11 @@ import LicenseScreen from "./components/LicenseScreen";
 import AdminPanel from "./components/AdminPanel";
 import AdminLogin from "./components/AdminLogin";
 import { UpdateManager } from "./components/UpdateManager";
-import { MercadoPagoNotification } from "./components/MercadoPagoNotification";
 import { restoreBackup } from "./lib/cloudBackup";
 import { syncData } from "./lib/cloudSync";
 import { SettingsPage } from "./pages/SettingsPage";
+import { MercadoPagoPage } from "./pages/MercadoPagoPage";
+import { GmailPage } from "./pages/GmailPage";
 
 type BackupSignatureRecord = {
   amount?: number;
@@ -335,7 +336,6 @@ function App() {
       <>
         <LicenseScreen />
         <UpdateManager />
-        <MercadoPagoNotification />
       </>
     );
   }
@@ -344,11 +344,13 @@ function App() {
   const pages: Record<Page, JSX.Element> = {
     dashboard: <Dashboard />,
     sales: <SalesPage />,
+    gmail: <div />,
+    mercadopago: <div />,
     expenses: <ExpensesPage />,
     cash_closure: <CashClosurePage />,
     reports: <ReportsPage />,
     charts: <ChartsPage />,
-    settings: <SettingsPage />, // 🔥 NUEVO
+    settings: <SettingsPage />,
   };
 
   return (
@@ -357,7 +359,19 @@ function App() {
         {pages[currentPage]}
       </Layout>
       <UpdateManager />
-      <MercadoPagoNotification />
+      {["gmail", "mercadopago"].map((p) => (
+        <div
+          key={p}
+          style={{
+            position: "fixed", top: 0, left: 256, right: 0, bottom: 0,
+            transform: currentPage === p ? "none" : "translateX(-9999px)",
+            background: "#fff",
+            zIndex: 10,
+          }}
+        >
+          {p === "gmail" ? <GmailPage /> : <MercadoPagoPage />}
+        </div>
+      ))}
     </>
   );
 }

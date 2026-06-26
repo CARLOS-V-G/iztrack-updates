@@ -144,17 +144,6 @@ declare global {
         created_at: string;
     }
 
-    type MpPayment = {
-        id: string;
-        payment_id: string;
-        amount: number;
-        status: string;
-        payer_email: string;
-        payment_method: string;
-        raw_data: Record<string, unknown>;
-        created_at: string;
-    };
-
     interface DiagnosticExportContext {
         userId?: string | null;
         backupsVisibleCount?: number;
@@ -404,7 +393,6 @@ declare global {
             setBarcode: (barcode: string) => Promise<boolean>;
             getScannerHistory: () => Promise<ScannerHistoryEntry[]>;
             getScannerBackend: () => Promise<string>;
-            onMpPayment: (callback: (payment: MpPayment) => void) => () => void;
 
         };
     }

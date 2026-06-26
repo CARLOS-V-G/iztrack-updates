@@ -2,10 +2,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 const invoke = (channel, ...args) => ipcRenderer.invoke(channel, ...args);
 const UPDATE_STATUS_CHANNEL = "updater:status";
-const MP_PAYMENT_CHANNEL = "mp:payment";
 const BARCODE_CHANNEL = "mp:barcode";
-
-const mpPaymentListeners = new Set();
 
 const api = Object.freeze({
     // ===== SALES =====
@@ -54,7 +51,8 @@ const api = Object.freeze({
     setBarcode: (barcode) => invoke("set-barcode", barcode),
     getScannerHistory: () => invoke("get-scanner-history"),
     getScannerBackend: () => invoke("get-scanner-backend"),
-    getMpPayments: () => invoke("get-mp-payments"),
+
+
     getAuditLogs: (limit) => invoke("get-audit-logs", limit),
 
     // ===== UPDATER =====
@@ -71,19 +69,6 @@ const api = Object.freeze({
 
         return () => {
             ipcRenderer.removeListener(UPDATE_STATUS_CHANNEL, listener);
-        };
-    },
-
-    onMpPayment: (callback) => {
-        if (typeof callback !== "function") return () => {};
-
-        const listener = (_event, payment) => callback(payment);
-        ipcRenderer.on(MP_PAYMENT_CHANNEL, listener);
-        mpPaymentListeners.add(listener);
-
-        return () => {
-            ipcRenderer.removeListener(MP_PAYMENT_CHANNEL, listener);
-            mpPaymentListeners.delete(listener);
         };
     },
 
