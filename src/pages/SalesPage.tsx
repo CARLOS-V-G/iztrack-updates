@@ -310,8 +310,8 @@ export function SalesPage() {
     };
   }, [form, amountPaid, baseAmount, surcharge, customSurcharge, discount, customDiscount, scannedTickets, editSale]);
 
-  const fetchSales = useCallback(async () => {
-    setLoading(true);
+  const fetchSales = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true);
 
     const data = (await window.api.getSales()) as Sale[];
     const filtered = data
@@ -324,15 +324,15 @@ export function SalesPage() {
       .map(({ sale }) => sale);
 
     setSales(filtered);
-    setLoading(false);
+    if (showLoading) setLoading(false);
   }, [filterDate]);
 
   useEffect(() => {
     fetchSales();
 
-    // FIX #3: Poll for sales updates every 2 seconds so changes reflect in real-time
+    // Poll for sales updates every 2 seconds so changes reflect in real-time
     const pollInterval = setInterval(() => {
-      fetchSales();
+      fetchSales(false);
     }, 2000);
 
     return () => {
