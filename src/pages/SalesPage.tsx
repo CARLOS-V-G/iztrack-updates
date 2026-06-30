@@ -84,6 +84,9 @@ interface ScannedTicket {
   code: string;
   amount: number;
   label: string;
+  truncatedAmount?: boolean;
+  rawAmount?: number;
+  estimatedWeightKg?: number;
 }
 
 interface ScannerMessage {
@@ -130,6 +133,11 @@ function playSuccess() {
   setTimeout(() => playBeep(880, 120), 80);
 }
 
+function playWarning() {
+  playBeep(440, 140);
+  setTimeout(() => playBeep(440, 140), 180);
+}
+
 function parseMoney(value: string | number) {
   return Number(String(value).replace(/\D/g, ""));
 }
@@ -153,30 +161,84 @@ function matchesSalePaymentFilter(sale: Sale, filter: SalePaymentFilter) {
   return sale.payment_method === filter;
 }
 
+// ====== sessionStorage persistence helpers ======
+function getSalesDraft(): SaleDraft | null {
+  try {
+    const stored = sessionStorage.getItem("sales_draft");
+    return stored ? JSON.parse(stored) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveSalesDraft(draft: SaleDraft) {
+  try {
+    sessionStorage.setItem("sales_draft", JSON.stringify(draft));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+function clearSalesDraft() {
+  try {
+    sessionStorage.removeItem("sales_draft");
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+function getScannerModeState(): boolean {
+  try {
+    const stored = sessionStorage.getItem("scanner_mode_active");
+    return stored === "true";
+  } catch {
+    return false;
+  }
+}
+
+function saveScannerModeState(active: boolean) {
+  try {
+    sessionStorage.setItem("scanner_mode_active", String(active));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+function clearScannerModeState() {
+  try {
+    sessionStorage.removeItem("scanner_mode_active");
+  } catch {
+    // Ignore storage errors
+  }
+}
+
 export function SalesPage() {
+  // Restore draft from sessionStorage or use empty
+  const savedDraft = getSalesDraft();
+  
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editSale, setEditSale] = useState<Sale | null>(null);
   const [draftBeforeEdit, setDraftBeforeEdit] = useState<SaleDraft | null>(null);
-  const [form, setForm] = useState<SaleForm>(emptyForm);
+  const [form, setForm] = useState<SaleForm>(savedDraft?.form || emptyForm);
   const [filterDate, setFilterDate] = useState(todayStr());
   const [salePaymentFilter, setSalePaymentFilter] = useState<SalePaymentFilter>("all");
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [amountPaid, setAmountPaid] = useState("");
-  const [surcharge, setSurcharge] = useState(0);
-  const [customSurcharge, setCustomSurcharge] = useState("");
-  const [discount, setDiscount] = useState(0);
-  const [customDiscount, setCustomDiscount] = useState("");
-  const [baseAmount, setBaseAmount] = useState("");
+  const [amountPaid, setAmountPaid] = useState(savedDraft?.amountPaid || "");
+  const [surcharge, setSurcharge] = useState(savedDraft?.surcharge || 0);
+  const [customSurcharge, setCustomSurcharge] = useState(savedDraft?.customSurcharge || "");
+  const [discount, setDiscount] = useState(savedDraft?.discount || 0);
+  const [customDiscount, setCustomDiscount] = useState(savedDraft?.customDiscount || "");
+  const [baseAmount, setBaseAmount] = useState(savedDraft?.baseAmount || "");
   const [saleAlert, setSaleAlert] = useState<SaleAlert | null>(null);
   const [barcodeInput, setBarcodeInput] = useState("");
-  const [scannedTickets, setScannedTickets] = useState<ScannedTicket[]>([]);
+  const [scannedTickets, setScannedTickets] = useState<ScannedTicket[]>(savedDraft?.scannedTickets || []);
   const [scannerMessage, setScannerMessage] = useState<ScannerMessage | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [scannerConfig, setScannerConfig] = useState<ScannerConfig>(DEFAULT_SCANNER_CONFIG);
-  const [scannerMode, setScannerMode] = useState(false);
+  const [scannerMode, setScannerMode] = useState(getScannerModeState());
   const [scannerBackend, setScannerBackend] = useState("");
   const [scannerHistory, setScannerHistory] = useState<ScannerHistoryEntry[]>([]);
   const [showScannerHistory, setShowScannerHistory] = useState(false);
@@ -188,6 +250,7 @@ export function SalesPage() {
   const barcodeSubmitRef = useRef<(value: string) => void>(() => undefined);
   const quickSaveRef = useRef<() => void>(() => undefined);
   const scannerConfigRef = useRef<ScannerConfig>(DEFAULT_SCANNER_CONFIG);
+  const draftSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const focusScannerInput = useCallback(() => {
     window.setTimeout(() => {
@@ -218,6 +281,35 @@ export function SalesPage() {
     }
   }, [form.payment_method]);
 
+  // FIX #2, #4: Auto-save draft to sessionStorage every time form changes (debounced)
+  useEffect(() => {
+    if (draftSaveTimeoutRef.current) {
+      clearTimeout(draftSaveTimeoutRef.current);
+    }
+
+    draftSaveTimeoutRef.current = setTimeout(() => {
+      if (!editSale) { // Only save when creating new, not editing
+        const draft: SaleDraft = {
+          form,
+          amountPaid,
+          baseAmount,
+          surcharge,
+          customSurcharge,
+          discount,
+          customDiscount,
+          scannedTickets,
+        };
+        saveSalesDraft(draft);
+      }
+    }, 500); // Save after 500ms of inactivity
+
+    return () => {
+      if (draftSaveTimeoutRef.current) {
+        clearTimeout(draftSaveTimeoutRef.current);
+      }
+    };
+  }, [form, amountPaid, baseAmount, surcharge, customSurcharge, discount, customDiscount, scannedTickets, editSale]);
+
   const fetchSales = useCallback(async () => {
     setLoading(true);
 
@@ -237,6 +329,15 @@ export function SalesPage() {
 
   useEffect(() => {
     fetchSales();
+
+    // FIX #3: Poll for sales updates every 2 seconds so changes reflect in real-time
+    const pollInterval = setInterval(() => {
+      fetchSales();
+    }, 2000);
+
+    return () => {
+      clearInterval(pollInterval);
+    };
   }, [fetchSales]);
 
   useEffect(() => {
@@ -343,8 +444,12 @@ export function SalesPage() {
   }, []);
 
   useEffect(() => {
+    // FIX #1: Persist scanner mode to sessionStorage (don't disable on unmount)
     window.api.toggleScannerMode(scannerMode);
-    return () => { window.api.toggleScannerMode(false); };
+    saveScannerModeState(scannerMode);
+    
+    // Don't cleanup - scanner should stay active when navigating away
+    // Only disable scanner explicitly when form is reset or saved
   }, [scannerMode]);
 
   useEffect(() => {
@@ -378,6 +483,9 @@ export function SalesPage() {
     setBarcodeInput("");
     setScannedTickets([]);
     setScannerMessage(null);
+    setScannerMode(false); // FIX #1: Disable scanner after saving
+    clearSalesDraft();
+    clearScannerModeState();
     focusScannerInput();
   }
 
@@ -476,6 +584,9 @@ export function SalesPage() {
         code: parsed.code,
         amount: parsed.amount,
         label: parsed.label,
+        truncatedAmount: parsed.truncatedAmount,
+        rawAmount: parsed.rawAmount,
+        estimatedWeightKg: parsed.estimatedWeightKg,
       },
     ];
     const nextAmount = parseMoney(form.amount) + parsed.amount;
@@ -488,10 +599,18 @@ export function SalesPage() {
       updateForm("payment_method", defaultPayment);
     }
 
-    setScannerMessage({
-      tone: "success",
-      message: `Ticket detectado: ${formatCurrency(parsed.amount)}`,
-    });
+    if (parsed.truncatedAmount) {
+      setScannerMessage({
+        tone: "warning",
+        message: `Importe corregido: la balanza informo ${formatCurrency(parsed.rawAmount)} pero el precio real estimado es ${formatCurrency(parsed.amount)} (~${parsed.estimatedWeightKg?.toFixed(2)}kg). Verifica el ticket antes de cobrar.`,
+      });
+      if (scannerConfigRef.current.play_sound) playWarning();
+    } else {
+      setScannerMessage({
+        tone: "success",
+        message: `Ticket detectado: ${formatCurrency(parsed.amount)}`,
+      });
+    }
     setBarcodeInput("");
     focusScannerInput();
   }
@@ -738,13 +857,25 @@ export function SalesPage() {
             </div>
             <div className="divide-y divide-slate-50">
               {scannedTickets.map((ticket, index) => (
-                <div key={ticket.id} className="px-2.5 py-1.5 flex items-center justify-between gap-2">
+                <div key={ticket.id} className={`px-2.5 py-1.5 flex items-center justify-between gap-2 ${ticket.truncatedAmount ? "bg-amber-50" : ""}`}>
                   <div className="min-w-0">
-                    <p className="text-[11px] font-medium text-slate-700 truncate">Ticket {index + 1} - {ticket.label}</p>
-                    <p className="text-[10px] text-slate-400 truncate">{ticket.code}</p>
+                    <p className="text-[11px] font-medium text-slate-700 truncate flex items-center gap-1">
+                      {ticket.truncatedAmount && (
+                        <AlertTriangle className="w-3 h-3 text-amber-500 flex-shrink-0" />
+                      )}
+                      Ticket {index + 1} - {ticket.label}
+                    </p>
+                    <p className="text-[10px] text-slate-400 truncate">
+                      {ticket.code}
+                      {ticket.truncatedAmount && ticket.rawAmount !== undefined && (
+                        <span className="text-amber-600"> · corregido (balanza: {formatCurrency(ticket.rawAmount)})</span>
+                      )}
+                    </p>
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <span className="text-[11px] font-bold text-slate-900">{formatCurrency(ticket.amount)}</span>
+                    <span className={`text-[11px] font-bold ${ticket.truncatedAmount ? "text-amber-700" : "text-slate-900"}`} title={ticket.truncatedAmount ? `Importe corregido por limite de 6 digitos del codigo de barras. Peso estimado: ~${ticket.estimatedWeightKg?.toFixed(2)}kg` : undefined}>
+                      {formatCurrency(ticket.amount)}
+                    </span>
                     <button type="button" onClick={() => removeScannedTicket(ticket.id)} className="p-0.5 rounded text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors" title="Quitar">
                       <Trash2 className="w-3 h-3" />
                     </button>

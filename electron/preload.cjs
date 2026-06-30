@@ -39,6 +39,10 @@ const api = Object.freeze({
     restoreData: (data) => invoke("restore-data", data),
     exportDiagnostics: (context) => invoke("export-diagnostics", context),
 
+    // ===== LINKING (cloud pairing) =====
+    generateLinkCode: () => invoke("generate-link-code"),
+    checkLinkStatus: (token) => invoke("check-link-status", token),
+
     // ===== CASH CLOSURE / PRODUCTS =====
     getCashClosures: () => invoke("get-cash-closures"),
     saveCashClosure: (closure) => invoke("save-cash-closure", closure),
@@ -51,6 +55,7 @@ const api = Object.freeze({
     setBarcode: (barcode) => invoke("set-barcode", barcode),
     getScannerHistory: () => invoke("get-scanner-history"),
     getScannerBackend: () => invoke("get-scanner-backend"),
+    getScannerStatus: () => invoke("get-scanner-status"),
 
 
     getAuditLogs: (limit) => invoke("get-audit-logs", limit),

@@ -229,6 +229,8 @@ export async function saveBackup(
     userId: string,
     data: Omit<BackupData, "meta">,
     source: BackupSource = "manual",
+    companyId?: string,
+    branchId?: string,
 ): Promise<BackupResult> {
     try {
         const payload = await createStoredBackupData(data, source);
@@ -238,6 +240,8 @@ export async function saveBackup(
             .insert([
                 {
                     user_id: userId,
+                    company_id: companyId || null,
+                    branch_id: branchId || null,
                     data: payload,
                 },
             ])
@@ -301,7 +305,21 @@ export async function applyBackup(data: {
         });
     }
 
-    console.log("Datos restaurados");
+    if (data.cash_closures && data.cash_closures.length > 0) {
+        for (const closure of data.cash_closures) {
+            await window.api.saveCashClosure(closure);
+        }
+    }
+
+    if (data.products && data.products.length > 0) {
+        for (const product of data.products) {
+            await window.api.saveProduct(product);
+        }
+    }
+
+    if (data.scanner_config) {
+        await window.api.saveScannerConfig(data.scanner_config);
+    }
 }
 
 export { getErrorMessage };

@@ -26,4 +26,11 @@ license.json
 *.sln
 *.sw?
 .env
+.env.production
+.env.local
 supabase/.temp
+
+# Secrets / one-off scripts (never commit tokens or service keys)
+migrate-data.cjs
+*token_mp.txt
+tmp_migration_check.sql

@@ -3,9 +3,12 @@ import { Product, ScannerConfig } from "./types";
 export interface ScaleBarcodeResult {
   code: string;
   amount: number;
+  rawAmount: number;
   label: string;
   plu: string;
   product?: Product;
+  truncatedAmount?: boolean;
+  estimatedWeightKg?: number;
 }
 
 export const DEFAULT_SCANNER_CONFIG: ScannerConfig = {
@@ -21,7 +24,21 @@ export const DEFAULT_SCANNER_CONFIG: ScannerConfig = {
   default_payment_method: "",
   max_char_interval: 50,
   min_code_length: 3,
+  detect_truncated_amount: true,
 };
+
+// El campo "importe" del codigo EAN-13 de balanza tiene un ancho fijo
+// (normalmente 6 digitos). Si el precio real supera ese limite, la balanza
+// lo trunca por desborde (modulo) antes de imprimir el codigo de barras.
+// Ej: $12.285,50 -> el campo de 6 digitos solo guarda "228550" -> $2.285,50.
+//
+// Cuando hay un precio por kg configurado para el PLU, podemos detectar este
+// desborde: si el peso implicito (importe / precio_por_kg) da algo
+// fisicamente imposible (unos pocos gramos), probamos sumar "vueltas"
+// completas del campo hasta encontrar un peso plausible.
+const MIN_PLAUSIBLE_WEIGHT_KG = 0.01;
+const MAX_PLAUSIBLE_WEIGHT_KG = 100;
+const MAX_WRAP_ATTEMPTS = 9;
 
 export function isValidEan13(code: string) {
   if (!/^\d{13}$/.test(code)) return false;
@@ -55,23 +72,53 @@ export function parseScaleBarcode(
     mergedConfig.plu_start,
     mergedConfig.plu_start + mergedConfig.plu_length,
   );
-  const rawAmount = code.slice(
+  const rawAmountStr = code.slice(
     mergedConfig.amount_start,
     mergedConfig.amount_start + mergedConfig.amount_length,
   );
-  const amount = Number(rawAmount) / mergedConfig.amount_divisor;
+  const rawAmount = Number(rawAmountStr) / mergedConfig.amount_divisor;
 
-  if (!plu || !Number.isFinite(amount) || amount <= 0) return null;
+  if (!plu || !Number.isFinite(rawAmount) || rawAmount <= 0) return null;
 
   const plu6 = plu.padStart(6, "0");
   const product = products.find((item) => item.active !== false && item.plu === plu6);
 
+  let amount = rawAmount;
+  let truncatedAmount = false;
+  let estimatedWeightKg: number | undefined;
+
+  if (
+    mergedConfig.detect_truncated_amount !== false &&
+    product?.price_per_kg &&
+    product.price_per_kg > 0
+  ) {
+    const impliedWeight = rawAmount / product.price_per_kg;
+    estimatedWeightKg = impliedWeight;
+
+    if (impliedWeight < MIN_PLAUSIBLE_WEIGHT_KG) {
+      const wrapModulus = 10 ** mergedConfig.amount_length / mergedConfig.amount_divisor;
+      for (let attempt = 1; attempt <= MAX_WRAP_ATTEMPTS; attempt++) {
+        const candidateAmount = rawAmount + attempt * wrapModulus;
+        const candidateWeight = candidateAmount / product.price_per_kg;
+        if (candidateWeight >= MIN_PLAUSIBLE_WEIGHT_KG && candidateWeight <= MAX_PLAUSIBLE_WEIGHT_KG) {
+          amount = candidateAmount;
+          estimatedWeightKg = candidateWeight;
+          truncatedAmount = true;
+          break;
+        }
+      }
+    }
+  }
+
   return {
     code,
     amount,
+    rawAmount,
     label: product ? `${product.name} (PLU ${plu})` : `PLU ${plu}`,
     plu,
     product,
+    truncatedAmount,
+    estimatedWeightKg,
   };
 }
 

@@ -670,6 +670,20 @@ export function CashClosurePage() {
                 </label>
               </div>
 
+              <label className="mt-4 flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-2.5 text-xs text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={scannerConfig.detect_truncated_amount !== false}
+                  onChange={(event) => setScannerConfig((current) => ({ ...current, detect_truncated_amount: event.target.checked }))}
+                  className="mt-0.5 rounded border-slate-300"
+                />
+                <span>
+                  <span className="font-medium text-slate-700">Detectar importes truncados</span>
+                  <br />
+                  Si el precio supera el limite de 6 digitos del codigo de barras (ej: mas de $9.999,99), usa el precio/kg del producto para corregir el importe automaticamente.
+                </span>
+              </label>
+
               <Button className="mt-4 w-full shadow-sm hover:shadow-md transition-all duration-300" variant="secondary" onClick={saveScannerConfig}>
                 <Save className="h-4 w-4" />
                 Guardar configuracion

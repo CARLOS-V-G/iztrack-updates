@@ -1,16 +1,13 @@
 const crypto = require("crypto");
 const { createClient } = require("@supabase/supabase-js");
 
-const SECRET = "iztrack-secret-key";
-
-// ⚠️ IMPORTANTE: usá la ANON KEY real (no publishable fake)
-const supabase = createClient(
-    "https://fdnoudylvoyamsbwygdt.supabase.co",
-    "sb_publishable_Wz4Y-edWnLTubNlLJUw8jg_Nf5zv4kd"
-);
+// Config centralizado (carga .env automaticamente en dev)
+const config = require("./config.cjs");
+const SECRET = config.LICENSE_SECRET;
+const supabase = createClient(config.SUPABASE_URL, config.SUPABASE_ANON_KEY);
 
 // =========================
-// 🔑 GENERAR LICENCIA
+// GENERAR LICENCIA
 // =========================
 function generarLicencia(email) {
     const hash = crypto
@@ -22,11 +19,9 @@ function generarLicencia(email) {
 }
 
 // =========================
-// ☁️ GUARDAR EN LA NUBE
+// GUARDAR EN LA NUBE
 // =========================
 async function guardarLicencia(email) {
-    console.log("🔥 INTENTANDO GUARDAR:", email);
-
     const key = generarLicencia(email);
 
     const { data, error } = await supabase
@@ -39,34 +34,30 @@ async function guardarLicencia(email) {
             },
         ])
         .select()
-        .single(); // 🔥 importante
+        .single();
 
     if (error) {
-        console.log("❌ ERROR:", error);
         return null;
     }
 
-    console.log("📦 LICENCIA CREADA:", data);
-
     return {
         key,
-        userId: data.id, // 🔥 ya devolvemos el user_id
+        userId: data.id,
     };
 }
 
 // =========================
-// 🔒 VALIDAR LICENCIA
+// VALIDAR LICENCIA
 // =========================
 async function validarLicencia(email, key, deviceId) {
     try {
-        // 1️⃣ validar formato local
+        // 1. Validar formato local
         const licenciaValida = generarLicencia(email);
         if (licenciaValida !== key) {
-            console.log("❌ Formato inválido");
             return { valid: false };
         }
 
-        // 2️⃣ buscar en la nube
+        // 2. Buscar en la nube
         const { data, error } = await supabase
             .from("licenses")
             .select("*")
@@ -75,46 +66,36 @@ async function validarLicencia(email, key, deviceId) {
             .single();
 
         if (error || !data) {
-            console.log("❌ No existe en la nube");
             return { valid: false };
         }
 
-        // 3️⃣ verificar estado
+        // 3. Verificar estado
         if (!data.active) {
-            console.log("⛔ Licencia desactivada");
             return { valid: false };
         }
 
-        // 4️⃣ verificar dispositivo
+        // 4. Verificar dispositivo
         if (data.device_id && data.device_id !== deviceId) {
-            console.log("🚫 Usada en otra PC");
             return { valid: false };
         }
 
-        // 5️⃣ guardar primer uso (bind a PC)
+        // 5. Guardar primer uso (bind a PC)
         if (!data.device_id) {
-            const { error: updateError } = await supabase
+            await supabase
                 .from("licenses")
                 .update({ device_id: deviceId })
                 .eq("id", data.id);
-
-            if (updateError) {
-                console.log("⚠️ Error guardando device_id:", updateError);
-            } else {
-                console.log("💻 Dispositivo registrado");
-            }
         }
-
-        console.log("✅ Licencia válida");
 
         return {
             valid: true,
-            userId: data.id, // 🔥 CLAVE PARA BACKUP
-            email: data.email, // 🔥 opcional útil
+            userId: data.id,
+            companyId: data.company_id,
+            branchId: data.branch_id,
+            email: data.email,
         };
 
-    } catch (err) {
-        console.log("🔥 ERROR VALIDANDO:", err);
+    } catch {
         return { valid: false };
     }
 }

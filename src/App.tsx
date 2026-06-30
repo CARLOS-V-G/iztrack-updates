@@ -69,14 +69,14 @@ function App() {
   const [currentPage, setCurrentPage] = useState<Page>("dashboard");
   const [licensed, setLicensed] = useState<boolean | null>(null);
 
-  // 🔥 SPLASH
+  // SPLASH
   const [loadingApp, setLoadingApp] = useState(true);
 
-  // 🔐 ADMIN
+  // ADMIN
   const [adminMode, setAdminMode] = useState(false);
   const [adminAuth, setAdminAuth] = useState(false);
 
-  // 🔥 ATAJO ADMIN
+  // ATAJO ADMIN
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.shiftKey && e.key === "A") {
@@ -88,12 +88,9 @@ function App() {
     return () => window.removeEventListener("keydown", handleKey);
   }, []);
 
-  // 🔑 LICENCIA
+  // LICENCIA
   useEffect(() => {
     window.api.checkLicense().then((res) => {
-      console.log("LICENCIA:", res);
-
-      // 🔥 ahora es objeto
       if (typeof res === "boolean") {
         setLicensed(res);
       } else {
@@ -102,10 +99,17 @@ function App() {
         if (res.valid && res.userId) {
           localStorage.setItem("userId", res.userId);
         }
+        if (res.valid && res.companyId) {
+          localStorage.setItem("companyId", res.companyId);
+        }
+        if (res.valid && res.branchId) {
+          localStorage.setItem("branchId", res.branchId);
+        }
       }
     });
   }, []);
 
+  // DATA WIPE REMOTO
   useEffect(() => {
     if (!licensed) return;
 
@@ -133,6 +137,7 @@ function App() {
     };
   }, [licensed]);
 
+  // MIGRACION INICIAL A LA NUBE
   useEffect(() => {
     if (!licensed) return;
 
@@ -150,19 +155,20 @@ function App() {
 
       const backup = await window.api.createBackup({
         userId,
+        companyId: localStorage.getItem("companyId"),
+        branchId: localStorage.getItem("branchId"),
         source: "migration",
       });
 
-      if (!backup.ok) return;
-
-      localStorage.setItem("backup_migrated", "true");
-
-      console.log("🚀 DATOS MIGRADOS A LA NUBE");
+      if (backup.ok) {
+        localStorage.setItem("backup_migrated", "true");
+      }
     }
 
     migrate();
   }, [licensed]);
 
+  // BACKUP AUTOMATICO CADA 5 MINUTOS
   useEffect(() => {
     if (!licensed) return;
 
@@ -178,6 +184,7 @@ function App() {
           window.api.getProducts(),
           window.api.getScannerConfig(),
         ]);
+
         const signature = getBackupSignature(
           sales,
           expenses,
@@ -189,12 +196,16 @@ function App() {
 
         if (signature === previousSignature) {
           localStorage.setItem("last_auto_backup_skipped_at", new Date().toISOString());
-          await syncData(userId);
+          const cId = localStorage.getItem("companyId");
+          const bId = localStorage.getItem("branchId");
+          if (cId && bId) await syncData(cId, bId);
           return;
         }
 
         const backup = await window.api.createBackup({
           userId,
+          companyId: localStorage.getItem("companyId"),
+          branchId: localStorage.getItem("branchId"),
           source: "automatic",
         });
 
@@ -215,24 +226,26 @@ function App() {
           );
         }
 
-        console.log("☁️ Backup automático");
-        await syncData(userId);
+        const cId = localStorage.getItem("companyId");
+        const bId = localStorage.getItem("branchId");
+        if (cId && bId) await syncData(cId, bId);
       },
       1000 * 60 * 5,
-    ); // cada 5 min
+    );
 
     return () => clearInterval(interval);
   }, [licensed]);
 
-  // ⏱️ SPLASH TIMER
+  // SPLASH TIMER
   useEffect(() => {
     const timer = setTimeout(() => {
       setLoadingApp(false);
-    }, 3000); // podés poner 5000 si querés
+    }, 3000);
 
     return () => clearTimeout(timer);
   }, []);
 
+  // RESTAURAR DESDE NUBE SI DB LOCAL VACIA
   useEffect(() => {
     if (!licensed) return;
 
@@ -249,12 +262,10 @@ function App() {
       const localSales = await window.api.getSales();
       const localExpenses = await window.api.getExpenses();
 
-      // 🔥 SOLO SI ESTÁ VACÍO
+      // Solo restaurar si la DB local esta vacia
       if (localSales.length > 0 || localExpenses.length > 0) {
         return;
       }
-
-      console.log("☁️ BUSCANDO BACKUP...");
 
       const data = await restoreBackup(userId);
 
@@ -269,14 +280,12 @@ function App() {
       }
 
       localStorage.setItem("backup_restored", "true");
-
-      console.log("🚀 RESTORE COMPLETO");
     }
 
     restore();
   }, [licensed]);
 
-  // 🔐 LOGIN ADMIN
+  // LOGIN ADMIN
   if (adminMode && !adminAuth) {
     return (
       <>
@@ -286,7 +295,7 @@ function App() {
     );
   }
 
-  // 🛠 PANEL ADMIN
+  // PANEL ADMIN
   if (adminMode && adminAuth) {
     return (
       <>
@@ -301,26 +310,22 @@ function App() {
     );
   }
 
-  // 🔥 SPLASH SCREEN
+  // SPLASH SCREEN
   if (loadingApp || licensed === null) {
     return (
       <div className="h-screen w-full bg-[#0b1b33] flex flex-col items-center justify-center relative">
-        {/* LOGO */}
         <div className="mb-6 flex justify-center">
           <img
-            src="../dist/logo.png"
+            src="./logo.png"
             alt="izTrack"
             className="w-28 h-28 object-contain rounded-[8px] drop-shadow-[0_10px_25px_rgba(0,0,0,0.5)]"
           />
         </div>
 
-        {/* NOMBRE */}
         <h1 className="text-white text-2xl font-semibold mb-10">izTrack</h1>
 
-        {/* LOADER */}
         <div className="w-10 h-10 border-4 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
 
-        {/* COPYRIGHT */}
         <div className="absolute bottom-4 right-6 text-[10px] text-slate-400 text-right">
           © 2026 izTrack
           <br />
@@ -330,7 +335,7 @@ function App() {
     );
   }
 
-  // 🔒 BLOQUEO
+  // BLOQUEO POR LICENCIA
   if (!licensed) {
     return (
       <>
@@ -340,7 +345,7 @@ function App() {
     );
   }
 
-  // ✅ APP NORMAL
+  // APP NORMAL
   const pages: Record<Page, JSX.Element> = {
     dashboard: <Dashboard />,
     sales: <SalesPage />,

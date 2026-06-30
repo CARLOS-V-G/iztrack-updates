@@ -24,6 +24,7 @@ const DEFAULT_SCANNER_CONFIG = {
     default_payment_method: "",
     max_char_interval: 50,
     min_code_length: 3,
+    detect_truncated_amount: true,
 };
 
 function invalid(message) {
@@ -410,6 +411,21 @@ function normalizeProductForSave(value) {
                 : normalizeNonNegativeAmount(product.price_per_kg, "price_per_kg"),
         active: product.active === undefined ? true : normalizeBoolean(product.active, "active"),
         notes: normalizeOptionalString(product.notes, "notes"),
+        // Campos extendidos del catalogo
+        category: normalizeOptionalString(product.category, "category"),
+        price:
+            product.price === undefined || product.price === null || product.price === ""
+                ? undefined
+                : normalizeNonNegativeAmount(product.price, "price"),
+        stock:
+            product.stock === undefined || product.stock === null || product.stock === ""
+                ? undefined
+                : normalizeNonNegativeAmount(product.stock, "stock"),
+        stock_min:
+            product.stock_min === undefined || product.stock_min === null || product.stock_min === ""
+                ? undefined
+                : normalizeNonNegativeAmount(product.stock_min, "stock_min"),
+        unit: normalizeOptionalString(product.unit, "unit"),
         created_at: normalizeTimestamp(product.created_at, "created_at"),
         updated_at: normalizeTimestamp(product.updated_at),
     };
@@ -497,6 +513,9 @@ function normalizeScannerConfig(value) {
             1,
             50,
         ),
+        detect_truncated_amount: config.detect_truncated_amount !== undefined
+            ? normalizeBoolean(config.detect_truncated_amount, "detect_truncated_amount")
+            : DEFAULT_SCANNER_CONFIG.detect_truncated_amount,
     };
 }
 

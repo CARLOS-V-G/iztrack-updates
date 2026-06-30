@@ -1,5 +1,7 @@
 export { };
 
+declare const __APP_VERSION__: string;
+
 declare global {
     // ======================
     // 💳 TIPOS GENERALES
@@ -110,6 +112,12 @@ declare global {
         price_per_kg?: number;
         active: boolean;
         notes?: string;
+        // Campos extendidos
+        category?: string;
+        price?: number;
+        stock?: number;
+        stock_min?: number;
+        unit?: string;
         created_at?: string;
         updated_at?: string;
     }
@@ -127,6 +135,7 @@ declare global {
         default_payment_method: PaymentMethod | "";
         max_char_interval: number;
         min_code_length: number;
+        detect_truncated_amount?: boolean;
         updated_at?: string;
     }
 
@@ -248,7 +257,9 @@ declare global {
             checkLicense: () => Promise<{
                 valid: boolean;
                 userId?: string;
-            }>;
+                companyId?: string;
+                branchId?: string;
+            } | boolean>;
             validateLicense: (data: {
                 email: string;
                 key: string;
@@ -256,6 +267,8 @@ declare global {
                 ok: boolean;
                 message: string;
                 userId?: string;
+                companyId?: string;
+                branchId?: string;
             }>;
             saveLicense: (data: {
                 email: string;
@@ -393,6 +406,7 @@ declare global {
             setBarcode: (barcode: string) => Promise<boolean>;
             getScannerHistory: () => Promise<ScannerHistoryEntry[]>;
             getScannerBackend: () => Promise<string>;
+            getScannerStatus: () => Promise<{ backend: string; active: boolean }>;
 
         };
     }

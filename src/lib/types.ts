@@ -53,6 +53,12 @@ export interface Product {
   price_per_kg?: number;
   active: boolean;
   notes?: string;
+  // Campos extendidos del catalogo
+  category?: string;
+  price?: number;        // Precio de venta por unidad
+  stock?: number;        // Stock actual
+  stock_min?: number;    // Stock minimo de alerta
+  unit?: string;         // Unidad de medida: "kg", "g", "unidad", "lt", "docena"
   created_at?: string;
   updated_at?: string;
 }
@@ -70,6 +76,7 @@ export interface ScannerConfig {
   default_payment_method: PaymentMethod | "";
   max_char_interval: number;
   min_code_length: number;
+  detect_truncated_amount?: boolean;
   updated_at?: string;
 }
 
@@ -104,7 +111,7 @@ export interface PeriodSummary {
   expensesCount: number;
 }
 
-export type Page = 'dashboard' | 'sales' | 'gmail' | 'mercadopago' | 'expenses' | 'cash_closure' | 'reports' | 'charts' | 'settings';
+export type Page = 'dashboard' | 'sales' | 'gmail' | 'mercadopago' | 'expenses' | 'cash_closure' | 'reports' | 'charts' | 'settings' | 'products';
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   cash: 'Efectivo',
@@ -134,3 +141,18 @@ export const EXPENSE_CATEGORIES = [
   'Equipamiento',
   'Otros',
 ];
+
+export const PRODUCT_CATEGORIES = [
+  'Carniceria / Fiambres',
+  'Panaderia / Pasteleria',
+  'Lacteos / Frescos',
+  'Almacen / Secos',
+  'Bebidas',
+  'Frutas y Verduras',
+  'Limpieza / Higiene',
+  'Congelados',
+  'Varios',
+  'Sin categoria',
+];
+
+export const PRODUCT_UNITS = ['unidad', 'kg', 'g', 'lt', 'ml', 'docena', 'pack', 'caja'];

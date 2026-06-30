@@ -4,6 +4,14 @@ const os = require("os");
 const fs = require("fs");
 const zlib = require("zlib");
 
+// Cargar .env en desarrollo (Node 20+ nativo, sin dependencias extra)
+try {
+    const envFile = path.join(__dirname, "..", ".env");
+    if (fs.existsSync(envFile) && typeof process.loadEnvFile === "function") {
+        process.loadEnvFile(envFile);
+    }
+} catch { /* silencioso en produccion */ }
+
 let autoUpdater = null;
 let autoUpdaterLoadError = null;
 
@@ -37,19 +45,17 @@ const {
     normalizeScannerConfig,
 } = require("./ipcValidation.cjs");
 
-// 🔥 SUPABASE
-const supabase = createClient(
-    "https://fdnoudylvoyamsbwygdt.supabase.co",
-    "sb_publishable_Wz4Y-edWnLTubNlLJUw8jg_Nf5zv4kd"
-);
+// Config centralizado: lee de env vars, fallback a produccion remota
+const config = require("./config.cjs");
+const supabase = createClient(config.SUPABASE_URL, config.SUPABASE_ANON_KEY);
 
-// 🔥 LOWDB
+// LOWDB
 const { db, initDB, dbPath } = require("./db/db.cjs");
 
-// 🔐 HASH ADMIN
-const ADMIN_HASH = "$2b$10$4AgqlQ1ypkZrzri0hLTlje3m40KZvPAWppOLJsqbB4luiNWtiEWk6";
+// Hash bcrypt del panel admin (desde config)
+const ADMIN_HASH = config.ADMIN_HASH;
 
-// 📄 LICENCIA LOCAL
+// LICENCIA LOCAL
 const licensePath = path.join(app.getPath("userData"), "license.json");
 
 let mainWindow;
@@ -637,6 +643,7 @@ function getDefaultScannerConfig() {
         default_payment_method: "",
         max_char_interval: 50,
         min_code_length: 3,
+        detect_truncated_amount: true,
     };
 }
 
@@ -1124,6 +1131,8 @@ ipcMain.handle("check-license", async () => {
         return {
             valid: true,
             userId: lic.id,
+            companyId: lic.company_id,
+            branchId: lic.branch_id,
         };
     } catch (err) {
         console.log("ERROR LICENCIA:", err);
@@ -1135,6 +1144,99 @@ ipcMain.handle("save-license", (_, data) => {
     const license = normalizeLicenseInput(data);
 
     writeLocalLicense(license);
+});
+
+// =========================
+// 🔗 VINCULACION (codigo IZT)
+// =========================
+
+ipcMain.handle("generate-link-code", async () => {
+    try {
+        if (!fs.existsSync(licensePath)) {
+            return { ok: false, error: "No hay licencia local activa." };
+        }
+        const lic = normalizeLicenseInput(
+            JSON.parse(fs.readFileSync(licensePath, "utf8"))
+        );
+        if (!lic.key) {
+            return { ok: false, error: "Licencia local sin key." };
+        }
+
+        // Get license record from DB
+        const { data: license } = await supabase
+            .from("licenses")
+            .select("id, company_id, active, branch_id")
+            .eq("license_key", lic.key)
+            .maybeSingle();
+
+        if (!license) {
+            return { ok: false, error: "Licencia no encontrada en el servidor." };
+        }
+        if (!license.active) {
+            return { ok: false, error: "Licencia inactiva." };
+        }
+
+        // Generate unique pairing code (always allow re-link)
+        const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+        const part = () => Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+        let token = `IZT-${part()}-${part()}`;
+
+        // Ensure uniqueness
+        let existing = await supabase.from("pending_links").select("id").eq("token", token).maybeSingle();
+        while (existing.data) {
+            token = `IZT-${part()}-${part()}`;
+            existing = await supabase.from("pending_links").select("id").eq("token", token).maybeSingle();
+        }
+
+        const { error } = await supabase.from("pending_links").insert({
+            token,
+            pc_info: getDeviceId(),
+            license_id: license.id,
+            branch_name: os.hostname(),
+            expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+        });
+
+        if (error) {
+            return { ok: false, error: "Error al generar el codigo en el servidor." };
+        }
+
+        return { ok: true, token, expires_in: 600 };
+    } catch (err) {
+        return { ok: false, error: "Error de conexion con el servidor" };
+    }
+});
+
+ipcMain.handle("check-link-status", async (_, token) => {
+    try {
+        const { data: link } = await supabase
+            .from("pending_links")
+            .select("status, expires_at, licenses!inner(company_id, branch_id)")
+            .eq("token", token.toUpperCase())
+            .maybeSingle();
+
+        if (!link) {
+            return { status: "invalid" };
+        }
+
+        if (link.status === "used" && link.licenses) {
+            return {
+                status: "linked",
+                company_id: link.licenses.company_id,
+                branch_id: link.licenses.branch_id,
+            };
+        }
+
+        if (link.status === "expired" || new Date(link.expires_at) < new Date()) {
+            if (link.status === "pending") {
+                await supabase.from("pending_links").update({ status: "expired" }).eq("token", token.toUpperCase());
+            }
+            return { status: "expired" };
+        }
+
+        return { status: "pending" };
+    } catch {
+        return { status: "error" };
+    }
 });
 
 ipcMain.handle("toggle-scanner-mode", (_, active) => {
@@ -1183,6 +1285,13 @@ ipcMain.handle("get-scanner-history", () => {
 
 ipcMain.handle("get-scanner-backend", () => {
     return barcodeScanner.getBackendName();
+});
+
+ipcMain.handle("get-scanner-status", () => {
+    return {
+        backend: barcodeScanner.getBackendName(),
+        active: barcodeScanner.isActive(),
+    };
 });
 
 ipcMain.handle("get-licenses", async () => {
@@ -1243,7 +1352,9 @@ ipcMain.handle("validate-license", async (_, data) => {
         return {
             ok: true,
             message: "Licencia activada correctamente",
-            userId: lic.id, // 🔥 ESTE ES EL CAMBIO CLAVE
+            userId: lic.id,
+            companyId: lic.company_id,
+            branchId: lic.branch_id,
         };
     } catch (err) {
         console.log("💥 ERROR VALIDATE:", err);
@@ -1909,7 +2020,9 @@ ipcMain.handle("run-pending-data-wipe", async (_, payload) => {
 
 ipcMain.handle("create-backup", async (_, data) => {
     try {
-        const userId = normalizeId(data?.userId, "user_id");
+        const userId = normalizeId(data?.userId || data?.user_id, "user_id");
+        const companyId = data?.companyId || null;
+        const branchId = data?.branchId || null;
         const source = normalizeBackupSource(data?.source);
 
         await db.read();
@@ -1920,6 +2033,8 @@ ipcMain.handle("create-backup", async (_, data) => {
         try {
             const insertPayload = {
                 user_id: userId,
+                company_id: companyId,
+                branch_id: branchId,
                 data: payload.data,
                 source,
                 sales_count: payload.stats.sales_count,
@@ -1946,6 +2061,8 @@ ipcMain.handle("create-backup", async (_, data) => {
                         .insert([
                             {
                                 user_id: userId,
+                                company_id: companyId,
+                                branch_id: branchId,
                                 data: payload.data,
                             },
                         ])

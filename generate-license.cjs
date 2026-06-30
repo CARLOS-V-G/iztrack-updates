@@ -1,9 +1,10 @@
 const { createClient } = require("@supabase/supabase-js");
 const { generarLicencia } = require("./electron/license.cjs");
 
+const { SUPABASE_URL, SUPABASE_ANON_KEY } = process.env;
 const supabase = createClient(
-    "https://fdnoudylvoyamsbwygdt.supabase.co",
-    "sb_publishable_Wz4Y-edWnLTubNlLJUw8jg_Nf5zv4kd"
+    SUPABASE_URL || "http://127.0.0.1:54321",
+    SUPABASE_ANON_KEY || "sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH"
 );
 
 const email = process.argv[2];

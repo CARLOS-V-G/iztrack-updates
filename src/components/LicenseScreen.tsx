@@ -2,10 +2,12 @@ import { useState } from "react";
 import logo from "../assets/logo.png";
 import { LicenseMessage } from "../components/ui/LicenseMessage";
 
-// 🔥 TIPO RESPUESTA BACKEND
 type LicenseResponse = {
   ok: boolean;
   message: string;
+  userId?: string;
+  companyId?: string;
+  branchId?: string;
 };
 
 function LicenseScreen() {
@@ -35,9 +37,11 @@ function LicenseScreen() {
         type: "success",
       });
 
-      // 🔥 GUARDAR EN LOCAL (CLAVE)
       localStorage.setItem("email", email);
       localStorage.setItem("license", key);
+
+      if (res.companyId) localStorage.setItem("companyId", res.companyId);
+      if (res.branchId) localStorage.setItem("branchId", res.branchId);
 
       await window.api.saveLicense({ email, key });
 
@@ -110,18 +114,18 @@ function LicenseScreen() {
         ¿No tenés licencia?
         <br />
         <a
-          href="mailto:tucorreo@gmail.com"
+          href="mailto:cv5944341@gmail.com"
           className="text-blue-400 hover:underline"
         >
-          Contactar por Email
+          cv5944341@gmail.com
         </a>
         <br />
         <a
-          href="https://wa.me/549XXXXXXXXXX"
+          href="https://wa.me/5491168912994"
           target="_blank"
           className="text-green-400 hover:underline"
         >
-          Contactar por WhatsApp
+          WhatsApp +54 9 11 6891-2994
         </a>
       </div>
     </div>

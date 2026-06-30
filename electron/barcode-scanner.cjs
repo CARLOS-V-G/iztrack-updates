@@ -19,6 +19,8 @@ let backendName = "none";
 let cleanup = null;
 let barcodeCallback = null;
 let active = false;
+let currentHwnd = null;
+let restartTimer = null;
 
 let buf = "";
 let lastTime = 0;
@@ -99,6 +101,24 @@ function tryPowerShell(callback, hwnd) {
 
         child.on("exit", (code) => {
             log("PS exited with code:", code);
+            // Auto-reconexion si el proceso cayo inesperadamente y el scanner sigue activo
+            if (active && barcodeCallback) {
+                log("PS exited unexpectedly, scheduling restart in 2s...");
+                if (restartTimer) clearTimeout(restartTimer);
+                restartTimer = setTimeout(() => {
+                    if (!active || !barcodeCallback) return;
+                    log("Attempting PS restart...");
+                    const newCleanup = tryPowerShell(barcodeCallback, currentHwnd);
+                    if (newCleanup) {
+                        cleanup = newCleanup;
+                        log("PS restarted successfully");
+                    } else {
+                        log("PS restart failed, trying uiohook fallback...");
+                        const uioCleanup = tryUiohook(barcodeCallback);
+                        if (uioCleanup) cleanup = uioCleanup;
+                    }
+                }, 2000);
+            }
         });
 
         backendName = "powershell";
@@ -142,6 +162,7 @@ function start(callback, hwnd) {
     if (active) return true;
     active = true;
     barcodeCallback = callback;
+    currentHwnd = hwnd;
     buf = "";
     lastTime = 0;
 
@@ -164,6 +185,11 @@ function stop() {
     if (!active) return;
     active = false;
     barcodeCallback = null;
+    currentHwnd = null;
+    if (restartTimer) {
+        clearTimeout(restartTimer);
+        restartTimer = null;
+    }
     if (cleanup) {
         cleanup();
         cleanup = null;
