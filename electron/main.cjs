@@ -39,6 +39,7 @@ const {
     normalizeLicenseRecordId,
     normalizePassword,
     normalizeProductForSave,
+    normalizeSecondaryProductForSave,
     normalizeSaleForCreate,
     normalizeSaleForUpdate,
     normalizeSaleVoidToggle,
@@ -653,6 +654,7 @@ function ensureExtendedDataShape() {
     db.data.expenses ||= [];
     db.data.cash_closures ||= [];
     db.data.products ||= [];
+    db.data.secondary_products ||= [];
     db.data.audit_logs ||= [];
     db.data.deleted_licenses ||= [];
     db.data.scanner_config = {
@@ -768,12 +770,14 @@ function createBackupPayload(source) {
     const expenses = (db.data.expenses || []).map(compactExpenseForBackup);
     const cash_closures = (db.data.cash_closures || []).map(compactCashClosureForBackup);
     const products = (db.data.products || []).map(compactProductForBackup);
+    const secondary_products = db.data.secondary_products || [];
     const audit_logs = (db.data.audit_logs || []).map(compactAuditLogForBackup);
     const jsonPayload = JSON.stringify({
         sales,
         expenses,
         cash_closures,
         products,
+        secondary_products,
         audit_logs,
         scanner_config: {
             ...getDefaultScannerConfig(),
@@ -815,6 +819,7 @@ function createBackupPayload(source) {
             expenses_count: expenses.length,
             cash_closures_count: cash_closures.length,
             products_count: products.length,
+            secondary_products_count: secondary_products.length,
             uncompressed_bytes: Buffer.byteLength(jsonPayload, "utf8"),
             compressed_bytes: compressed.byteLength,
         },
@@ -879,7 +884,7 @@ async function restoreCloudBackup(userId, backupId) {
     }
 
     const decodedBackup = decodeStoredBackupData(backup.data);
-    const { sales, expenses, cash_closures, products, audit_logs, scanner_config } =
+    const { sales, expenses, cash_closures, products, secondary_products, audit_logs, scanner_config } =
         normalizeBackupData(decodedBackup);
     const restoredAt = new Date().toISOString();
 
@@ -910,6 +915,12 @@ async function restoreCloudBackup(userId, backupId) {
         created_at: product.created_at || restoredAt,
         updated_at: product.updated_at || restoredAt,
     }));
+    db.data.secondary_products = (secondary_products || []).map((product) => ({
+        ...product,
+        id: product.id || uuidv4(),
+        created_at: product.created_at || restoredAt,
+        updated_at: product.updated_at || restoredAt,
+    }));
     db.data.audit_logs = audit_logs.map((log) => ({
         ...log,
         id: log.id || uuidv4(),
@@ -929,6 +940,7 @@ async function restoreCloudBackup(userId, backupId) {
         expenses_count: db.data.expenses.length,
         cash_closures_count: db.data.cash_closures.length,
         products_count: db.data.products.length,
+        secondary_products_count: db.data.secondary_products.length,
     };
 }
 
@@ -1691,6 +1703,70 @@ ipcMain.handle("delete-product", async (_, id) => {
     await db.write();
 });
 
+ipcMain.handle("get-secondary-products", async () => {
+    await db.read();
+    ensureExtendedDataShape();
+    return db.data.secondary_products || [];
+});
+
+ipcMain.handle("save-secondary-product", async (_, product) => {
+    const input = normalizeSecondaryProductForSave(product);
+
+    await db.read();
+    ensureExtendedDataShape();
+
+    const now = new Date().toISOString();
+    const existingIndex = db.data.secondary_products.findIndex(
+        (item) => item.id === input.id || item.barcode === input.barcode,
+    );
+
+    const savedProduct = {
+        ...(existingIndex >= 0 ? db.data.secondary_products[existingIndex] : {}),
+        ...input,
+        id: input.id || (existingIndex >= 0 ? db.data.secondary_products[existingIndex].id : uuidv4()),
+        created_at:
+            existingIndex >= 0
+                ? db.data.secondary_products[existingIndex].created_at || input.created_at || now
+                : input.created_at || now,
+        updated_at: input.updated_at || now,
+    };
+
+    if (existingIndex >= 0) {
+        db.data.secondary_products[existingIndex] = savedProduct;
+    } else {
+        db.data.secondary_products.push(savedProduct);
+    }
+
+    appendAuditLog(
+        existingIndex >= 0 ? "update" : "create",
+        "secondary_product",
+        savedProduct.id,
+        `Producto secundario codigo ${savedProduct.barcode} guardado: ${savedProduct.name}`,
+    );
+
+    await db.write();
+    return savedProduct;
+});
+
+ipcMain.handle("delete-secondary-product", async (_, id) => {
+    const productId = normalizeId(id);
+
+    await db.read();
+    ensureExtendedDataShape();
+
+    const product = db.data.secondary_products.find((item) => item.id === productId);
+    db.data.secondary_products = db.data.secondary_products.filter((item) => item.id !== productId);
+
+    appendAuditLog(
+        "delete",
+        "secondary_product",
+        productId,
+        product ? `Producto secundario ${product.name} (${product.barcode}) eliminado` : "Producto secundario eliminado",
+    );
+
+    await db.write();
+});
+
 ipcMain.handle("get-scanner-config", async () => {
     await db.read();
     ensureExtendedDataShape();
@@ -2135,7 +2211,7 @@ ipcMain.handle("restore-cloud-backup", async (_, data) => {
 
 ipcMain.handle("restore-data", async (_, backup) => {
     try {
-        const { sales, expenses, cash_closures, products, audit_logs, scanner_config } =
+        const { sales, expenses, cash_closures, products, secondary_products, audit_logs, scanner_config } =
             normalizeBackupData(backup);
         const restoredAt = new Date().toISOString();
 
@@ -2164,6 +2240,12 @@ ipcMain.handle("restore-data", async (_, backup) => {
             updated_at: closure.updated_at || restoredAt,
         }));
         db.data.products = products.map((product) => ({
+            ...product,
+            id: product.id || uuidv4(),
+            created_at: product.created_at || restoredAt,
+            updated_at: product.updated_at || restoredAt,
+        }));
+        db.data.secondary_products = (secondary_products || []).map((product) => ({
             ...product,
             id: product.id || uuidv4(),
             created_at: product.created_at || restoredAt,

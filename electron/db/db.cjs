@@ -10,6 +10,7 @@ const DEFAULT_DATA = {
     expenses: [],
     cash_closures: [],
     products: [],
+    secondary_products: [],
     audit_logs: [],
     scanner_config: {
         barcode_prefix: "2",
@@ -31,6 +32,7 @@ function cloneDefaultData() {
         expenses: [],
         cash_closures: [],
         products: [],
+        secondary_products: [],
         audit_logs: [],
         scanner_config: { ...DEFAULT_DATA.scanner_config },
     };
@@ -42,6 +44,7 @@ function normalizeDataShape(data) {
         expenses: Array.isArray(data?.expenses) ? data.expenses : [],
         cash_closures: Array.isArray(data?.cash_closures) ? data.cash_closures : [],
         products: Array.isArray(data?.products) ? data.products : [],
+        secondary_products: Array.isArray(data?.secondary_products) ? data.secondary_products : [],
         audit_logs: Array.isArray(data?.audit_logs) ? data.audit_logs : [],
         scanner_config:
             data?.scanner_config && typeof data.scanner_config === "object"
@@ -56,6 +59,7 @@ function countRecords(data) {
         (data.expenses?.length || 0) +
         (data.cash_closures?.length || 0) +
         (data.products?.length || 0) +
+        (data.secondary_products?.length || 0) +
         (data.audit_logs?.length || 0)
     );
 }
@@ -147,6 +151,7 @@ function mergeData(currentData, incomingData) {
             ["close_date"],
         ),
         products: mergeRecords(currentData.products, incomingData.products, ["plu"]),
+        secondary_products: mergeRecords(currentData.secondary_products, incomingData.secondary_products, ["barcode"]),
         audit_logs: mergeRecords(currentData.audit_logs, incomingData.audit_logs, [
             "created_at",
         ]),

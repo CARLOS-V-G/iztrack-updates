@@ -40,6 +40,10 @@ const webviewItems: NavItem[] = [
   { page: "mercadopago", label: "Mercado Pago", icon: Globe },
 ];
 
+const secondaryItems: NavItem[] = [
+  { page: "secondary_products", label: "Prod. Secundarios", icon: Package },
+];
+
 const settingsItem: NavItem = { page: "settings", label: "Configuracion", icon: Settings };
 
 function NavButton({ item, currentPage, onNavigate }: { item: NavItem; currentPage: Page; onNavigate: (page: Page) => void }) {
@@ -121,6 +125,19 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
 
         <div className="space-y-0.5">
           {webviewItems.map((item) => (
+            <NavButton key={item.page} item={item} currentPage={currentPage} onNavigate={onNavigate} />
+          ))}
+        </div>
+
+        {/* Secondary products */}
+        <div className="flex items-center gap-3 px-4 py-2">
+          <span className="flex-1 h-px bg-slate-800/60" />
+          <span className="text-[10px] font-medium text-slate-600 uppercase tracking-wider">Extras</span>
+          <span className="flex-1 h-px bg-slate-800/60" />
+        </div>
+
+        <div className="space-y-0.5">
+          {secondaryItems.map((item) => (
             <NavButton key={item.page} item={item} currentPage={currentPage} onNavigate={onNavigate} />
           ))}
         </div>

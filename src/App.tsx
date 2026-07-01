@@ -1,11 +1,5 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Layout } from "./components/Layout";
-import { Dashboard } from "./pages/Dashboard";
-import { SalesPage } from "./pages/SalesPage";
-import { ExpensesPage } from "./pages/ExpensesPage";
-import { CashClosurePage } from "./pages/CashClosurePage";
-import { ReportsPage } from "./pages/ReportsPage";
-import { ChartsPage } from "./pages/ChartsPage";
 import { Page } from "./lib/types";
 import LicenseScreen from "./components/LicenseScreen";
 import AdminPanel from "./components/AdminPanel";
@@ -13,9 +7,28 @@ import AdminLogin from "./components/AdminLogin";
 import { UpdateManager } from "./components/UpdateManager";
 import { restoreBackup } from "./lib/cloudBackup";
 import { syncData } from "./lib/cloudSync";
-import { SettingsPage } from "./pages/SettingsPage";
-import { MercadoPagoPage } from "./pages/MercadoPagoPage";
-import { GmailPage } from "./pages/GmailPage";
+
+const Dashboard = lazy(() => import("./pages/Dashboard").then(m => ({ default: m.Dashboard })));
+const SalesPage = lazy(() => import("./pages/SalesPage").then(m => ({ default: m.SalesPage })));
+const ExpensesPage = lazy(() => import("./pages/ExpensesPage").then(m => ({ default: m.ExpensesPage })));
+const CashClosurePage = lazy(() => import("./pages/CashClosurePage").then(m => ({ default: m.CashClosurePage })));
+const ReportsPage = lazy(() => import("./pages/ReportsPage").then(m => ({ default: m.ReportsPage })));
+const ChartsPage = lazy(() => import("./pages/ChartsPage").then(m => ({ default: m.ChartsPage })));
+const SettingsPage = lazy(() => import("./pages/SettingsPage").then(m => ({ default: m.SettingsPage })));
+const GmailPage = lazy(() => import("./pages/GmailPage").then(m => ({ default: m.GmailPage })));
+const MercadoPagoPage = lazy(() => import("./pages/MercadoPagoPage").then(m => ({ default: m.MercadoPagoPage })));
+const SecondaryProductsPage = lazy(() => import("./pages/SecondaryProductsPage").then(m => ({ default: m.SecondaryProductsPage })));
+
+const CONTENT_PAGES: Record<string, React.LazyExoticComponent<React.ComponentType>> = {
+  dashboard: Dashboard,
+  sales: SalesPage,
+  expenses: ExpensesPage,
+  cash_closure: CashClosurePage,
+  reports: ReportsPage,
+  charts: ChartsPage,
+  settings: SettingsPage,
+  secondary_products: SecondaryProductsPage,
+};
 
 type BackupSignatureRecord = {
   amount?: number;
@@ -346,37 +359,30 @@ function App() {
   }
 
   // APP NORMAL
-  const pages: Record<Page, JSX.Element> = {
-    dashboard: <Dashboard />,
-    sales: <SalesPage />,
-    gmail: <div />,
-    mercadopago: <div />,
-    expenses: <ExpensesPage />,
-    cash_closure: <CashClosurePage />,
-    reports: <ReportsPage />,
-    charts: <ChartsPage />,
-    settings: <SettingsPage />,
-  };
+  const PageComponent = CONTENT_PAGES[currentPage];
 
   return (
     <>
       <Layout currentPage={currentPage} onNavigate={setCurrentPage}>
-        {pages[currentPage]}
+        <Suspense fallback={<div className="flex items-center justify-center h-64 text-slate-400 text-sm animate-pulse">Cargando...</div>}>
+          {PageComponent ? <PageComponent /> : <div />}
+        </Suspense>
       </Layout>
       <UpdateManager />
-      {["gmail", "mercadopago"].map((p) => (
-        <div
-          key={p}
-          style={{
-            position: "fixed", top: 0, left: 256, right: 0, bottom: 0,
-            transform: currentPage === p ? "none" : "translateX(-9999px)",
-            background: "#fff",
-            zIndex: 10,
-          }}
-        >
-          {p === "gmail" ? <GmailPage /> : <MercadoPagoPage />}
+      {currentPage === "gmail" && (
+        <div style={{ position: "fixed", top: 0, left: 256, right: 0, bottom: 0, background: "#fff", zIndex: 10 }}>
+          <Suspense fallback={<div className="flex items-center justify-center h-full text-slate-400">Cargando...</div>}>
+            <GmailPage />
+          </Suspense>
         </div>
-      ))}
+      )}
+      {currentPage === "mercadopago" && (
+        <div style={{ position: "fixed", top: 0, left: 256, right: 0, bottom: 0, background: "#fff", zIndex: 10 }}>
+          <Suspense fallback={<div className="flex items-center justify-center h-full text-slate-400">Cargando...</div>}>
+            <MercadoPagoPage />
+          </Suspense>
+        </div>
+      )}
     </>
   );
 }

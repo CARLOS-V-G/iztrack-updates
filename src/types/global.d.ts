@@ -105,6 +105,17 @@ declare global {
         updated_at?: string;
     }
 
+    interface SecondaryProduct {
+        id: string;
+        barcode: string;
+        name: string;
+        price: number;
+        category?: string;
+        active: boolean;
+        created_at?: string;
+        updated_at?: string;
+    }
+
     interface Product {
         id: string;
         plu: string;
@@ -369,6 +380,7 @@ declare global {
                 expenses: Expense[];
                 cash_closures?: CashClosure[];
                 products?: Product[];
+                secondary_products?: SecondaryProduct[];
                 audit_logs?: AuditLog[];
                 scanner_config?: ScannerConfig;
             }) => Promise<boolean>;
@@ -391,6 +403,13 @@ declare global {
                 updated_at?: string;
             }) => Promise<Product>;
             deleteProduct: (id: string) => Promise<void>;
+            getSecondaryProducts: () => Promise<SecondaryProduct[]>;
+            saveSecondaryProduct: (product: Omit<SecondaryProduct, "id" | "created_at" | "updated_at"> & {
+                id?: string;
+                created_at?: string;
+                updated_at?: string;
+            }) => Promise<SecondaryProduct>;
+            deleteSecondaryProduct: (id: string) => Promise<void>;
             getScannerConfig: () => Promise<ScannerConfig>;
             saveScannerConfig: (config: ScannerConfig) => Promise<ScannerConfig>;
             getAuditLogs: (limit?: number) => Promise<AuditLog[]>;

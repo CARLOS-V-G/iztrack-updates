@@ -6,6 +6,7 @@ import {
     PaymentMethod,
     Product,
     ScannerConfig,
+    SecondaryProduct,
 } from "./types";
 
 export type BackupSource = "manual" | "automatic" | "migration";
@@ -15,6 +16,7 @@ export type BackupData = {
     expenses: BackupExpense[];
     cash_closures?: CashClosure[];
     products?: Product[];
+    secondary_products?: SecondaryProduct[];
     audit_logs?: AuditLog[];
     scanner_config?: ScannerConfig;
     meta?: BackupMeta;
@@ -196,6 +198,7 @@ async function createStoredBackupData(data: Omit<BackupData, "meta">, source: Ba
         expenses: data.expenses.map(compactExpense),
         cash_closures: data.cash_closures || [],
         products: data.products || [],
+        secondary_products: data.secondary_products || [],
         audit_logs: data.audit_logs || [],
         scanner_config: data.scanner_config,
         meta,
@@ -281,6 +284,7 @@ export async function applyBackup(data: {
     expenses: BackupExpense[];
     cash_closures?: CashClosure[];
     products?: Product[];
+    secondary_products?: SecondaryProduct[];
     audit_logs?: AuditLog[];
     scanner_config?: ScannerConfig;
 }) {
@@ -314,6 +318,12 @@ export async function applyBackup(data: {
     if (data.products && data.products.length > 0) {
         for (const product of data.products) {
             await window.api.saveProduct(product);
+        }
+    }
+
+    if (data.secondary_products && data.secondary_products.length > 0) {
+        for (const product of data.secondary_products) {
+            await window.api.saveSecondaryProduct(product);
         }
     }
 

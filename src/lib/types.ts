@@ -111,7 +111,18 @@ export interface PeriodSummary {
   expensesCount: number;
 }
 
-export type Page = 'dashboard' | 'sales' | 'gmail' | 'mercadopago' | 'expenses' | 'cash_closure' | 'reports' | 'charts' | 'settings' | 'products';
+export interface SecondaryProduct {
+  id: string;
+  barcode: string;
+  name: string;
+  price: number;
+  category?: string;
+  active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export type Page = 'dashboard' | 'sales' | 'gmail' | 'mercadopago' | 'expenses' | 'cash_closure' | 'reports' | 'charts' | 'settings' | 'products' | 'secondary_products';
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   cash: 'Efectivo',

@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import { Expense, Sale } from "./types";
+import { Expense, Sale, SecondaryProduct } from "./types";
 
 type SyncRecord = {
     id: string;
@@ -8,7 +8,7 @@ type SyncRecord = {
 };
 
 type SyncTableConfig<T extends SyncRecord> = {
-    table: "sales" | "expenses";
+    table: "sales" | "expenses" | "secondary_products";
     companyId: string;
     branchId: string;
     localItems: T[];
@@ -125,6 +125,19 @@ function expenseToCloud(expense: Expense) {
     };
 }
 
+function secondaryProductToCloud(product: SecondaryProduct) {
+    return {
+        id: product.id,
+        barcode: product.barcode,
+        name: product.name,
+        price: product.price,
+        category: product.category || null,
+        active: product.active,
+        created_at: product.created_at,
+        updated_at: product.updated_at,
+    };
+}
+
 export async function syncData(companyId: string, branchId: string) {
     console.log("SYNC INICIADO");
 
@@ -151,6 +164,17 @@ export async function syncData(companyId: string, branchId: string) {
         toCloudRow: expenseToCloud,
         addLocal: (expense) => window.api.addExpense(expense),
         updateLocal: (expense) => window.api.updateExpense(expense),
+    });
+
+    const localSecondary = await window.api.getSecondaryProducts();
+    await syncTable<SecondaryProduct>({
+        table: "secondary_products",
+        companyId,
+        branchId,
+        localItems: localSecondary,
+        toCloudRow: secondaryProductToCloud,
+        addLocal: (item) => window.api.saveSecondaryProduct(item),
+        updateLocal: (item) => window.api.saveSecondaryProduct(item),
     });
 
     console.log("SYNC COMPLETO");

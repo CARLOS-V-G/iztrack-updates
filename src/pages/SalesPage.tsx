@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Banknote,
@@ -25,6 +25,7 @@ import {
   PAYMENT_METHOD_COLORS,
   Product,
   ScannerConfig,
+  SecondaryProduct,
 } from "../lib/types";
 
 import { formatCurrency, todayStr, formatDate } from "../lib/utils";
@@ -237,6 +238,7 @@ export function SalesPage() {
   const [scannedTickets, setScannedTickets] = useState<ScannedTicket[]>(savedDraft?.scannedTickets || []);
   const [scannerMessage, setScannerMessage] = useState<ScannerMessage | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
+  const [secondaryProducts, setSecondaryProducts] = useState<SecondaryProduct[]>([]);
   const [scannerConfig, setScannerConfig] = useState<ScannerConfig>(DEFAULT_SCANNER_CONFIG);
   const [scannerMode, setScannerMode] = useState(getScannerModeState());
   const [scannerBackend, setScannerBackend] = useState("");
@@ -333,7 +335,7 @@ export function SalesPage() {
     // Poll for sales updates every 2 seconds so changes reflect in real-time
     const pollInterval = setInterval(() => {
       fetchSales(false);
-    }, 2000);
+    }, 15000);
 
     return () => {
       clearInterval(pollInterval);
@@ -344,8 +346,9 @@ export function SalesPage() {
     let cancelled = false;
 
     async function fetchScannerData() {
-      const [savedProducts, savedConfig, history, backend] = await Promise.all([
+      const [savedProducts, savedSecondary, savedConfig, history, backend] = await Promise.all([
         window.api.getProducts(),
+        window.api.getSecondaryProducts(),
         window.api.getScannerConfig(),
         window.api.getScannerHistory(),
         window.api.getScannerBackend(),
@@ -354,6 +357,7 @@ export function SalesPage() {
       if (cancelled) return;
 
       setProducts((savedProducts || []) as Product[]);
+      setSecondaryProducts((savedSecondary || []) as SecondaryProduct[]);
       const merged = { ...DEFAULT_SCANNER_CONFIG, ...(savedConfig || {}) };
       setScannerConfig(merged);
       scannerConfigRef.current = merged;
@@ -366,7 +370,7 @@ export function SalesPage() {
     const interval = setInterval(async () => {
       const history = await window.api.getScannerHistory();
       if (!cancelled) setScannerHistory(history || []);
-    }, 3000);
+    }, 15000);
 
     return () => {
       cancelled = true;
@@ -567,6 +571,41 @@ export function SalesPage() {
     const parsed = parseScaleBarcode(value, scannerConfig, products);
 
     if (!parsed) {
+      const cleanBarcode = value.replace(/\D/g, "");
+      const secondary = secondaryProducts.find(
+        (p) => p.active !== false && p.barcode === cleanBarcode,
+      );
+
+      if (secondary) {
+        const nextTickets = [
+          ...scannedTickets,
+          {
+            id: `${Date.now()}-${secondary.barcode}`,
+            code: secondary.barcode,
+            amount: secondary.price,
+            label: secondary.name,
+          },
+        ];
+        const nextAmount = parseMoney(form.amount) + secondary.price;
+
+        setScannedTickets(nextTickets);
+        applyAmountFromScanner(nextAmount);
+
+        const defaultPayment = scannerConfigRef.current.default_payment_method;
+        if (defaultPayment && PAYMENT_METHODS.includes(defaultPayment) && !form.payment_method) {
+          updateForm("payment_method", defaultPayment);
+        }
+
+        setScannerMessage({
+          tone: "success",
+          message: `${secondary.name}: ${formatCurrency(secondary.price)}`,
+        });
+        if (scannerConfigRef.current.play_sound) playSuccess();
+        setBarcodeInput("");
+        focusScannerInput();
+        return;
+      }
+
       setScannerMessage({
         tone: "danger",
         message: getScaleBarcodeError(value, scannerConfig),
@@ -753,35 +792,44 @@ export function SalesPage() {
     fetchSales();
   }
 
-  const activeSales = sales.filter((s) => !s.voided);
-  const visibleSales = sales.filter((sale) =>
-    matchesSalePaymentFilter(sale, salePaymentFilter),
-  );
-  const visibleActiveSales = visibleSales.filter((sale) => !sale.voided);
-  const visibleVoidedSales = visibleSales.filter((sale) => sale.voided);
-  const visibleTotal = visibleActiveSales.reduce(
-    (sum, sale) => sum + Number(sale.amount),
-    0,
+  const activeSales = useMemo(
+    () => sales.filter((s) => !s.voided),
+    [sales],
   );
 
-  const totalByMethod = PAYMENT_METHODS.reduce(
-    (acc, m) => {
-      acc[m] = activeSales
-        .filter((s) => s.payment_method === m)
-        .reduce((sum, sale) => sum + Number(sale.amount), 0);
-      return acc;
-    },
-    {} as Record<PaymentMethod, number>,
-  );
-  const countByMethod = PAYMENT_METHODS.reduce(
-    (acc, m) => {
-      acc[m] = activeSales.filter((s) => s.payment_method === m).length;
-      return acc;
-    },
-    {} as Record<PaymentMethod, number>,
-  );
+  const { visibleSales, visibleActiveSales, visibleVoidedSales } = useMemo(() => {
+    const visible = sales.filter((sale) =>
+      matchesSalePaymentFilter(sale, salePaymentFilter),
+    );
+    const active = visible.filter((sale) => !sale.voided);
+    const voided = visible.filter((sale) => sale.voided);
+    return {
+      visibleSales: visible,
+      visibleActiveSales: active,
+      visibleVoidedSales: voided,
+    };
+  }, [sales, salePaymentFilter]);
 
-  const grandTotal = activeSales.reduce((s, sale) => s + sale.amount, 0);
+  const { totalByMethod, countByMethod, grandTotal } = useMemo(() => {
+    const totalByMethod = PAYMENT_METHODS.reduce(
+      (acc, m) => {
+        acc[m] = activeSales
+          .filter((s) => s.payment_method === m)
+          .reduce((sum, sale) => sum + Number(sale.amount), 0);
+        return acc;
+      },
+      {} as Record<PaymentMethod, number>,
+    );
+    const countByMethod = PAYMENT_METHODS.reduce(
+      (acc, m) => {
+        acc[m] = activeSales.filter((s) => s.payment_method === m).length;
+        return acc;
+      },
+      {} as Record<PaymentMethod, number>,
+    );
+    const grandTotal = activeSales.reduce((s, sale) => s + sale.amount, 0);
+    return { totalByMethod, countByMethod, grandTotal };
+  }, [activeSales]);
 
   function applySurcharge(percent: number) {
     const base = Number(baseAmount) || Number(form.amount) || 0;

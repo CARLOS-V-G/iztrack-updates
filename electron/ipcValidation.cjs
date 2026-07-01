@@ -441,6 +441,30 @@ function normalizeProductForSave(value) {
     return normalized;
 }
 
+function normalizeSecondaryProductForSave(value) {
+    const product = assertPlainObject(value, "secondary_product");
+    const normalized = {
+        barcode: normalizeString(product.barcode, "barcode", 24),
+        name: normalizeString(product.name, "name", MAX_SHORT_TEXT_LENGTH),
+        price: normalizeNonNegativeAmount(product.price, "price"),
+        category: normalizeOptionalString(product.category, "category"),
+        active: product.active === undefined ? true : normalizeBoolean(product.active, "active"),
+        created_at: normalizeTimestamp(product.created_at, "created_at"),
+        updated_at: normalizeTimestamp(product.updated_at),
+    };
+
+    if (!/^\d{8,13}$/.test(normalized.barcode.replace(/\D/g, ""))) {
+        invalid("codigo de barras invalido (debe tener entre 8 y 13 digitos)");
+    }
+    normalized.barcode = normalized.barcode.replace(/\D/g, "");
+
+    if (product.id !== undefined && product.id !== null) {
+        normalized.id = normalizeId(product.id);
+    }
+
+    return normalized;
+}
+
 function normalizeScannerConfig(value) {
     const config = assertPlainObject(value, "scanner_config");
 
@@ -567,6 +591,7 @@ function normalizeBackupData(value) {
             normalizeCashClosureForSave,
         ),
         products: normalizeArray(backup.products, "products", normalizeProductForSave),
+        secondary_products: normalizeArray(backup.secondary_products, "secondary_products", normalizeSecondaryProductForSave),
         audit_logs: normalizeArray(backup.audit_logs, "audit_logs", normalizeAuditLog),
         scanner_config:
             backup.scanner_config && typeof backup.scanner_config === "object"
@@ -623,6 +648,7 @@ module.exports = {
     normalizeLicenseRecordId,
     normalizePassword,
     normalizeProductForSave,
+    normalizeSecondaryProductForSave,
     normalizeSaleForCreate,
     normalizeSaleForUpdate,
     normalizeSaleVoidToggle,
