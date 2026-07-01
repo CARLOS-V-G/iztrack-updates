@@ -907,16 +907,16 @@ export function SalesPage() {
               {scannedTickets.map((ticket, index) => (
                 <div key={ticket.id} className={`px-2.5 py-1.5 flex items-center justify-between gap-2 ${ticket.truncatedAmount ? "bg-amber-50" : ""}`}>
                   <div className="min-w-0">
-                    <p className="text-[11px] font-medium text-slate-700 truncate flex items-center gap-1">
+                    <p className="text-[11px] font-medium text-slate-700 break-words flex items-center gap-1 leading-relaxed">
                       {ticket.truncatedAmount && (
-                        <AlertTriangle className="w-3 h-3 text-amber-500 flex-shrink-0" />
+                        <AlertTriangle className="w-3 h-3 text-amber-500 flex-shrink-0 mt-0.5" />
                       )}
-                      Ticket {index + 1} - {ticket.label}
+                      {ticket.label}
                     </p>
-                    <p className="text-[10px] text-slate-400 truncate">
-                      {ticket.code}
+                    <p className="text-[10px] text-slate-400 truncate flex items-center gap-1">
+                      <span className="text-slate-300">#{ticket.code.slice(-6)}</span>
                       {ticket.truncatedAmount && ticket.rawAmount !== undefined && (
-                        <span className="text-amber-600"> · corregido (balanza: {formatCurrency(ticket.rawAmount)})</span>
+                        <span className="text-amber-600">· corregido (balanza: {formatCurrency(ticket.rawAmount)})</span>
                       )}
                     </p>
                   </div>
@@ -1291,7 +1291,7 @@ export function SalesPage() {
           </div>
         </div>
 
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
           <Card className="flex flex-col h-[70vh] min-h-[575px]">
             <div className="p-7 border-b border-slate-100 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between bg-gradient-to-r from-slate-50/80 to-white">
               <div className="flex items-center gap-3">
