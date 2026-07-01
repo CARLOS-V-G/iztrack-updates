@@ -990,7 +990,7 @@ export function SalesPage() {
                   style={{
                     borderColor: active ? color : "#e2e8f0",
                     background: active ? `linear-gradient(145deg, ${color} 0%, ${color}dd 100%)` : "#fff",
-                    padding: "14px 0",
+                    padding: "17px 0",
                   }}
                 >
                   <div style={{ color: active ? "#fff" : color }} className="flex justify-center">
