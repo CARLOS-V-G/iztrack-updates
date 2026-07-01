@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Barcode,
   Plus,
@@ -34,6 +34,13 @@ export function SecondaryProductsPage() {
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const barcodeRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (modalOpen) {
+      setTimeout(() => barcodeRef.current?.focus(), 100);
+    }
+  }, [modalOpen]);
 
   const fetchProducts = useCallback(async () => {
     const data = (await window.api.getSecondaryProducts()) as SecondaryProduct[];
@@ -97,11 +104,27 @@ export function SecondaryProductsPage() {
       return;
     }
 
+    const cleanBarcode = form.barcode.trim().replace(/\D/g, "");
+    const cleanName = form.name.trim();
+    const duplicate = products.find(
+      (p) =>
+        p.id !== editId &&
+        (p.barcode === cleanBarcode || p.name.toLowerCase() === cleanName.toLowerCase()),
+    );
+    if (duplicate) {
+      setFormError(
+        duplicate.barcode === cleanBarcode
+          ? "Ya existe un producto con ese codigo de barras"
+          : "Ya existe un producto con ese nombre",
+      );
+      return;
+    }
+
     setSaving(true);
     try {
       const payload: Parameters<typeof window.api.saveSecondaryProduct>[0] = {
-        barcode: form.barcode.trim(),
-        name: form.name.trim(),
+        barcode: cleanBarcode,
+        name: cleanName,
         price: Number(form.price),
         category: form.category.trim() || undefined,
         active: form.active,
@@ -296,84 +319,96 @@ export function SecondaryProductsPage() {
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
-              {formError && (
-                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600 flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-                  {formError}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSave();
+              }}
+            >
+              <div className="p-6 space-y-4">
+                {formError && (
+                  <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600 flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                    {formError}
+                  </div>
+                )}
+
+                <div>
+                  <label className="text-xs font-medium text-slate-700 block mb-1.5">
+                    Codigo de Barras
+                  </label>
+                  <input
+                    ref={barcodeRef}
+                    type="text"
+                    value={form.barcode}
+                    onChange={(e) => setForm({ ...form, barcode: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") e.preventDefault();
+                    }}
+                    placeholder="Ej: 7798224212271"
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                  />
                 </div>
-              )}
 
-              <div>
-                <label className="text-xs font-medium text-slate-700 block mb-1.5">
-                  Codigo de Barras
-                </label>
-                <input
-                  type="text"
-                  value={form.barcode}
-                  onChange={(e) => setForm({ ...form, barcode: e.target.value })}
-                  placeholder="Ej: 7798224212271"
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
-                />
+                <div>
+                  <label className="text-xs font-medium text-slate-700 block mb-1.5">
+                    Nombre
+                  </label>
+                  <input
+                    type="text"
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    placeholder="Ej: Albahaca seca en sobre"
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-medium text-slate-700 block mb-1.5">
+                    Precio
+                  </label>
+                  <input
+                    type="number"
+                    step="1"
+                    min="0"
+                    value={form.price}
+                    onChange={(e) => setForm({ ...form, price: e.target.value })}
+                    placeholder="Ej: 250"
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-medium text-slate-700 block mb-1.5">
+                    Categoria <span className="text-slate-400">(opcional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={form.category}
+                    onChange={(e) => setForm({ ...form, category: e.target.value })}
+                    placeholder="Ej: Especias, Condimentos"
+                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="text-xs font-medium text-slate-700 block mb-1.5">
-                  Nombre
-                </label>
-                <input
-                  type="text"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="Ej: Albahaca seca en sobre"
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
-                />
+              <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setModalOpen(false)}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
+                >
+                  {saving ? "Guardando..." : editId ? "Guardar Cambios" : "Crear Producto"}
+                </button>
               </div>
-
-              <div>
-                <label className="text-xs font-medium text-slate-700 block mb-1.5">
-                  Precio
-                </label>
-                <input
-                  type="number"
-                  step="1"
-                  min="0"
-                  value={form.price}
-                  onChange={(e) => setForm({ ...form, price: e.target.value })}
-                  placeholder="Ej: 250"
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-slate-700 block mb-1.5">
-                  Categoria <span className="text-slate-400">(opcional)</span>
-                </label>
-                <input
-                  type="text"
-                  value={form.category}
-                  onChange={(e) => setForm({ ...form, category: e.target.value })}
-                  placeholder="Ej: Especias, Condimentos"
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200">
-              <button
-                onClick={() => setModalOpen(false)}
-                className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
-              >
-                {saving ? "Guardando..." : editId ? "Guardar Cambios" : "Crear Producto"}
-              </button>
-            </div>
+            </form>
           </div>
         </div>
       )}
